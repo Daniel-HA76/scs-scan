@@ -255,7 +255,7 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
     <p class="say" style="margin-top:12px">재고 실사 사용법</p>
     <div class="intro">
       <div class="step"><span class="n">1</span><p>라벨을 카메라에 비추세요<small>바코드가 없으면 [사진 찍기]를 누르세요</small></p></div>
-      <div class="step"><span class="n">2</span><p>눈에 보이는 개수를 누르고 [수량 저장]<small>같은 자재가 또 나오면 또 찍으세요. 알아서 더합니다</small></p></div>
+      <div class="step"><span class="n">2</span><p>눈에 보이는 개수를 누르고 [수량 저장]<small>같은 자재가 또 나오면 다시 찍으세요. 수량은 자동으로 더해집니다</small></p></div>
       <div class="step"><span class="n">3</span><p>다 세면 위의 [합계 보기] → [PC로 보내기]<small>보내기 전에는 언제든 수정할 수 있습니다</small></p></div>
     </div>
     <span class="sp" style="flex:1"></span>
@@ -278,7 +278,7 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
 
   <!-- 찍기 -->
   <section class="main" id="scrScan" hidden>
-    <div class="notice" id="replaceNote" hidden><b>맞는 자재를 찍거나 [목록에서 찾기]로 고르세요.</b> <button class="link" data-act="cancelReplace">그만두기</button></div>
+    <div class="notice" id="replaceNote" hidden><b>맞는 자재의 라벨을 다시 찍거나 [목록에서 찾기]로 고르세요.</b> <button class="link" data-act="cancelReplace">그만두기</button></div>
     <div class="notice" id="unsentNote" hidden></div>
     <p class="say" id="scanSay">라벨을 네모 안에 비추세요</p>
     <div class="cam">
@@ -306,7 +306,7 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
     <div class="cands" id="pickList"></div>
     <button class="big primary" data-act="regFromPhoto" id="regFromPhotoBtn">목록에 없음 · 새로 등록</button>
     <div class="row2">
-      <button class="big plain" data-act="backScan">다시 찍기</button>
+      <button class="big plain" data-act="backScan">사진 다시 찍기</button>
       <button class="big plain" data-act="search">목록에서 찾기</button>
     </div>
     <div class="center"><button class="link" data-act="unknown">등록하지 않고 사진만 남기기</button></div>
@@ -358,7 +358,7 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
     <div class="cands" id="findList"></div>
     <p class="tiny center" style="margin:6px 0 -4px">찾는 자재가 목록에 없으면</p>
     <button class="big plain" data-act="noLabel">목록에 없음 · 새로 등록</button>
-    <button class="big plain" data-act="backScan">찍기로 돌아가기</button>
+    <button class="big plain" data-act="backScan">사진 찍기로 돌아가기</button>
   </section>
 
   <!-- 수량 -->
@@ -441,7 +441,7 @@ if (IN_KAKAO) { try { location.href = "kakaotalk://web/openExternal?url=" + enco
 const CONFIG = {
   SCRIPT_URL: "https://script.google.com/macros/s/AKfycbyhuiMHursNOZZknzEwk7as9JcFmxck1FlwoqMZ89D-I3FcdhCG0b1mfJrdQ2Mk6Hb5Aw/exec",         // 구글 Apps Script 웹 앱 주소 (…/exec)
   SCRIPT_KEY: "93f0816da47f4397",         // 구글 시트 Config 탭의 KEY 값
-  APP_VERSION: "ver 0.7", BIG_QTY: 500 };
+  APP_VERSION: "ver 0.8", BIG_QTY: 500 };
 try { const o = JSON.parse(localStorage.getItem("scs_config") || "null"); if (o && o.url) { CONFIG.SCRIPT_URL = o.url; CONFIG.SCRIPT_KEY = o.key || "" } } catch (e) {}
 try { const q = new URLSearchParams(location.search); if (q.get("api")) { CONFIG.SCRIPT_URL = q.get("api"); CONFIG.SCRIPT_KEY = q.get("key") || ""; localStorage.setItem("scs_config", JSON.stringify({ url: CONFIG.SCRIPT_URL, key: CONFIG.SCRIPT_KEY })) } } catch (e) {}
 
@@ -490,7 +490,7 @@ async function loadData() {
       const v = await apiGet("version", 6000);
       if (cache && cache.version === v.version) d = cache;
       else { d = await apiGet("data", 15000); save("scs_data_cache", d) }
-    } catch (e) { d = cache; if (d) setTimeout(() => flash("인터넷이 안 돼서 지난번 목록으로 합니다"), 600) }
+    } catch (e) { d = cache; if (d) setTimeout(() => flash("인터넷이 안 돼서 지난번에 받은 자재목록으로 엽니다"), 600) }
   }
   if (!d) d = window.SCS_DATA || load("scs_data_cache", null);
   if (!d) { document.body.innerHTML = '<p style="padding:24px">자재목록을 불러오지 못했습니다. 인터넷을 확인하고 다시 열어 주세요.</p>'; return false }
@@ -563,15 +563,25 @@ function show(id) {
   syncInstall();
   if (id === "scrScan") { lastScan = null; camOn() } else camOff();
   window.scrollTo(0, 0);
-  armBack();
   kbSync();
 }
 
 /* ===== 폰 뒤로 가기 버튼 =====
    한 페이지 앱이라 그냥 두면 뒤로 가기에 앱이 닫힘 → 기록을 하나 넣어 두고, 누르면 앱 안의 이전 화면으로.
    찍기 첫 화면에서는 한 번 더 누르면 닫힘 */
-let backArmed = false, exitAsk = 0;
-function armBack() { if (backArmed) return; try { history.pushState({ scs: 1 }, ""); backArmed = true } catch (e) {} }
+// 크롬은 화면을 누르지 않은 채 넣은 기록이 있으면 뒤로 가기 때 그 앞 자리를 건너뜀(앱이 닫힘)
+// → 기록은 화면을 누르는 동작 안에서만 넣음. 뒤로 가기를 연달아 눌러도 되게 3칸까지 쌓아 둠
+const BACK_DEPTH = 3;
+let skipPop = false;
+function armBack() {
+  try {
+    if (navigator.userActivation && !navigator.userActivation.isActive) return;   // 코드가 누른 버튼(.click())은 빼고 사람이 누른 것만
+    let d = (history.state && history.state.scs) || 0;
+    while (d < BACK_DEPTH) { d++; history.pushState({ scs: d }, "") }
+  } catch (e) {}
+}
+document.addEventListener("click", armBack, true);
+document.addEventListener("touchend", armBack, true);
 function goBack() {
   if (!$("rmBg").hidden) { $("rmBg").hidden = true; return true }
   if (!$("sheetBg").hidden) { closeSheet(); return true }
@@ -587,10 +597,12 @@ function goBack() {
   }
 }
 window.addEventListener("popstate", () => {
-  backArmed = false;
-  if (goBack()) { armBack(); return }
-  if (Date.now() - exitAsk < 2500) { history.back(); return }
-  exitAsk = Date.now(); toast("뒤로 버튼을 한 번 더 누르면 앱이 닫힙니다"); armBack();
+  if (skipPop) { skipPop = false; return }
+  if (goBack()) return;   // 기록은 다음에 화면을 누를 때 다시 채움 (누르지 않고 넣으면 크롬이 그 자리를 건너뛰어 앱이 닫힘)
+  // 사진 찍기 첫 화면: 남은 기록을 모두 지나 맨 처음 자리로 → 다음 뒤로 가기에 앱이 닫힘
+  const d = (history.state && history.state.scs) || 0;
+  if (d > 0) { skipPop = true; history.go(-d) }
+  toast("뒤로 버튼을 한 번 더 누르면 앱이 닫힙니다");
 });
 
 /* ===== 실사 줄 ===== */
@@ -949,7 +961,7 @@ function openQty(matId, how) {
 function startQty(matId, how, cond, val) {
   const m = MAT[matId] || null;
   qtyCtx = { mat: matId, how, cond, val: val ? String(val) : "", warned: false, fresh: !!val }; // fresh: 고칠 때 첫 숫자는 덮어씀
-  $("qtyItem").innerHTML = m ? `<div class="how">${esc(how || "")}</div><div class="nm">${esc(m.n)}${m.local ? '<span class="tag">새로 등록</span>' : ""}</div><div class="sp2">${esc(m.s)}</div><div class="md"><span>${esc(m.f)}</span><span class="code">${esc(m.m)}</span></div><div class="rmline"><span>비고 ${esc(m.r || "없음")}</span>${canEditMat(m) ? `<button class="link" data-act="regEdit">등록 내용 수정</button>` : `<button class="link" data-act="rmOpen" data-id="${esc(m.id)}">비고 수정</button>`}</div>${editing ? `<div class="rmline"><span>자재가 잘못 잡혔으면</span><button class="link" data-act="lnSwap">다른 자재로 바꾸기</button></div>` : ""}<div class="sofar" id="soFar"></div>`
+  $("qtyItem").innerHTML = m ? `<div class="how">${esc(how || "")}</div><div class="nm">${esc(m.n)}${m.local ? '<span class="tag">새로 등록</span>' : ""}</div><div class="sp2">${esc(m.s)}</div><div class="md"><span>${esc(m.f)}</span><span class="code">${esc(m.m)}</span></div><div class="rmline"><span>비고 ${esc(m.r || "없음")}</span>${canEditMat(m) ? `<button class="link" data-act="regEdit">등록 내용 수정</button>` : `<button class="link" data-act="rmOpen" data-id="${esc(m.id)}">비고 수정</button>`}</div>${editing ? `<div class="rmline"><span>다른 자재로 잘못 들어갔으면</span><button class="link" data-act="lnSwap">다른 자재로 바꾸기</button></div>` : ""}<div class="sofar" id="soFar"></div>`
     : `<div class="nm">모르는 품목</div><div class="sp2">사진을 남겨 두면 사무실에서 등록합니다</div><div class="sofar" id="soFar"></div>`;
   $("qtyPhoto").hidden = !!m || !(qtyCtx.photo = editing ? getPhoto(editing.id) : lastPhoto); if (!m) $("qtyPhoto").src = qtyCtx.photo || "";
   // 신품·중고·개봉품을 늘 다 보여 주고 사람이 고름
@@ -1057,7 +1069,7 @@ function renderSum() {
     h += `<div class="grp"><button data-act="grp" data-k="${esc(k)}" aria-expanded="${op}"><span class="t"><b>${esc(matTitle(m))}</b><span>${m ? esc(m.s) + " · " + '<span class="code">' + esc(m.m) + "</span>" : "사진만 남김"}</span></span><span class="tot num">${esc(parts.join(" · "))}<small>${esc(detail.join(" · "))}</small></span></button>` +
       (op ? `<div class="chips">${arr.map(l => `<button class="chip num" data-act="line" data-id="${esc(l.id)}">${esc(lineDesc(l))}<small>${esc(new Date(l.t).toTimeString().slice(0, 5))}</small></button>`).join("")}</div>` : "") + `</div>`;
   }
-  $("sumList").innerHTML = h || `<div class="empty" style="border:0">찍기로 돌아가서 라벨을 비춰 보세요</div>`;
+  $("sumList").innerHTML = h || `<div class="empty" style="border:0">아직 센 것이 없습니다. [실사 계속하기]를 누르고 라벨을 비춰 보세요</div>`;
   $("sendBtn").textContent = ls.length ? "PC로 보내기 (" + ls.length + "줄)" : "PC로 보내기";
   $("verLine").textContent = CONFIG.APP_VERSION + " · 자재목록 " + (D.version || "") + (CONFIG.SCRIPT_URL ? "" : " · 시험판: PC로 보내기 = 엑셀 내려받기");
 }
