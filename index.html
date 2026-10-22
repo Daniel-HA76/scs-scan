@@ -5,8 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="SCS 재고관리">
 <meta name="theme-color" content="#38424c">
-<title>SCS 재고 스캔</title>
+<title>SCS 재고관리</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
 <style>
@@ -43,13 +47,28 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); ou
 .code { font-family: var(--f-code); letter-spacing: .01em }
 .num { font-variant-numeric: tabular-nums }
 
-.band { background: var(--mode); color: var(--on-mode); display: flex; align-items: center; gap: 8px;
-  padding: calc(10px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px));
-  position: sticky; top: 0; z-index: 5 }
-.band .mode { font-weight: 600; font-size: 17px }
-.band .who { font-size: 14px; opacity: .85; padding: 6px 8px; border-radius: 8px }
+.band { background: var(--work, var(--mode)); color: var(--on-mode); position: sticky; top: 0; z-index: 5 }
 .band .sp { flex: 1 }
-.band .end { background: var(--on-mode); color: var(--mode); font-weight: 600; padding: 8px 16px; border-radius: 10px }
+/* 1줄: 앱 이름 (간판) */
+.band .appline { display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,.32); font-size: 12px; letter-spacing: .04em; color: rgba(255,255,255,.78);
+  padding: calc(4px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 4px max(16px, env(safe-area-inset-left, 0px)) }
+.band .appline b { font-weight: 600; color: #fff }
+.band .appline .ver { font-family: var(--f-code); font-size: 11px }
+/* 2줄: 지금 하는 작업 */
+.band .workline { display: flex; align-items: center; gap: 6px; padding: 7px max(16px, env(safe-area-inset-right, 0px)) 7px max(12px, env(safe-area-inset-left, 0px)) }
+.band .mode { font-weight: 700; font-size: 19px; padding: 4px 6px; border-radius: 8px; color: #fff }
+.band .mode small { font-size: 12px; font-weight: 400; opacity: .8; margin-left: 2px }
+.band .who { font-size: 14px; opacity: .85; padding: 6px 8px; border-radius: 8px; color: #fff }
+.band .end { background: var(--on-mode); color: var(--work, var(--mode)); font-weight: 600; padding: 8px 14px; border-radius: 10px }
+/* 작업 고르기 */
+.works { display: flex; flex-direction: column; gap: 12px }
+.works button { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 2px; text-align: left; min-height: 72px; padding: 12px 16px; border-radius: 14px; background: var(--card); border: 1.5px solid var(--line); border-left: 10px solid var(--wc) }
+.works button b { font-size: 20px; font-weight: 600 }
+.works button span { font-size: 13px; color: var(--muted) }
+.works button[disabled] { opacity: .5; cursor: default }
+.sendnote { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; text-align: left; font-size: 15px; width: 100% }
+.sendnote b { color: var(--bad) }
+.sendnote ol { margin: 6px 0 0; padding-left: 20px }
 
 .main { flex: 1; padding: 14px max(16px, env(safe-area-inset-right, 0px)) 16px max(16px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 12px }
 .say { font-size: 20px; font-weight: 600; text-align: center; margin: 2px 0 0 }
@@ -107,7 +126,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); ou
 .warnbox { background: var(--warn-bg); color: var(--warn); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px }
 .warnbox b { font-size: 17px }
 
-.toast { position: fixed; left: 50%; transform: translateX(-50%); top: calc(68px + env(safe-area-inset-top, 0px)); width: min(448px, calc(100% - 32px));
+.toast { position: fixed; left: 50%; transform: translateX(-50%); top: calc(96px + env(safe-area-inset-top, 0px)); width: min(448px, calc(100% - 32px));
   background: var(--ok-bg); color: var(--ok); border-radius: 14px; padding: 12px 14px; display: flex; align-items: center; gap: 10px; z-index: 30; box-shadow: 0 6px 20px rgba(0,0,0,.18) }
 .toast .m { flex: 1; font-size: 17px; font-weight: 600; color: var(--fg) }
 .toast.err { background: var(--bad-bg) }
@@ -220,10 +239,13 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
 <body>
 <div class="wrap">
   <header class="band" id="band" hidden>
-    <span class="mode" id="bandMode">재고 실사</span>
-    <button class="who" id="bandWho" data-act="rename" aria-label="이름 바꾸기"></button>
-    <span class="sp"></span>
-    <button class="end" id="bandEnd" data-act="finish">실사 마침</button>
+    <div class="appline"><b>SCS 재고관리</b><span class="sp"></span><span class="ver" id="bandVer"></span></div>
+    <div class="workline">
+      <button class="mode" id="bandMode" data-act="work" aria-label="작업 바꾸기"></button>
+      <button class="who" id="bandWho" data-act="rename" aria-label="이름 바꾸기"></button>
+      <span class="sp"></span>
+      <button class="end" id="bandEnd" data-act="finish">합계 보기</button>
+    </div>
   </header>
 
   <!-- 처음 안내 -->
@@ -232,7 +254,7 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
     <div class="intro">
       <div class="step"><span class="n">1</span><p>라벨을 카메라에 비추세요<small>바코드가 없으면 [사진 찍기]를 누르세요</small></p></div>
       <div class="step"><span class="n">2</span><p>눈에 보이는 개수를 누르고 [수량 저장]<small>같은 자재가 또 나오면 또 찍으세요. 알아서 더합니다</small></p></div>
-      <div class="step"><span class="n">3</span><p>다 세면 위의 [실사 마침] → [보내기]<small>보내기 전에는 언제든 수정할 수 있습니다</small></p></div>
+      <div class="step"><span class="n">3</span><p>다 세면 위의 [합계 보기] → [PC로 보내기]<small>보내기 전에는 언제든 수정할 수 있습니다</small></p></div>
     </div>
     <span class="sp" style="flex:1"></span>
     <button class="big primary" data-act="introOk">시작하기</button>
@@ -243,6 +265,13 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
     <p class="say" style="margin-top:12px">작업자를 고르세요</p>
     <p class="sub" style="margin-top:0">한 번만 고르면 다음부터는 묻지 않습니다</p>
     <div class="names" id="nameList"></div>
+  </section>
+
+  <!-- 작업 고르기 -->
+  <section class="main" id="scrWork" hidden>
+    <p class="say" style="margin-top:12px">무슨 작업을 합니까?</p>
+    <div class="works" id="workList"></div>
+    <div class="center"><button class="link" data-act="install" id="installLink2" hidden>바탕화면에 아이콘 만들기</button></div>
   </section>
 
   <!-- 찍기 -->
@@ -256,7 +285,7 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
       <div class="cam-flash" id="camFlash" hidden></div>
     </div>
     <button class="big primary" data-act="snap">사진 찍기</button>
-    <div class="center"><button class="link" data-act="search">목록에서 찾기</button><button class="link" data-act="noLabel">라벨 없는 자재 등록</button><button class="link" data-act="pickFile" id="fileLink" hidden>사진 파일에서</button></div>
+    <div class="center"><button class="link" data-act="search">목록에서 찾기</button><button class="link" data-act="pickFile" id="fileLink" hidden>사진 파일에서</button><button class="link" data-act="install" id="installLink" hidden>바탕화면에 아이콘 만들기</button></div>
     <div class="recent" id="recentBox"></div>
     <input type="file" id="fileSnap" accept="image/*" capture="environment" hidden>
     <div id="fileScan" hidden></div>
@@ -325,6 +354,8 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
     <input class="find" id="findBox" name="scs_q" type="search" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="예: 모듈 팬듀잇 캣6a" aria-label="찾을 품목">
     <p class="tiny center" id="findCount" style="margin:0">한글로도 찾습니다. 띄어 쓰면 모두 들어간 것만 나옵니다</p>
     <div class="cands" id="findList"></div>
+    <p class="tiny center" style="margin:6px 0 -4px">찾는 자재가 목록에 없으면</p>
+    <button class="big plain" data-act="noLabel">목록에 없음 · 새로 등록</button>
     <button class="big plain" data-act="backScan">찍기로 돌아가기</button>
   </section>
 
@@ -351,14 +382,14 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
 
   <!-- 정리 (끝) -->
   <section class="main" id="scrSum" hidden>
-    <p class="say">센 것 정리</p>
+    <p class="say">품목별 합계 리스트</p>
     <p class="sub" id="sumSub"></p>
     <div id="sumList" style="display:flex;flex-direction:column;gap:10px"></div>
     <p class="ver" id="verLine"></p>
   </section>
   <div class="foot" id="sumFoot" hidden>
-    <button class="big primary" data-act="send" id="sendBtn">보내기</button>
-    <button class="big plain" data-act="backScan">계속 찍기</button>
+    <button class="big primary" data-act="send" id="sendBtn">PC로 보내기</button>
+    <button class="big plain" data-act="backScan">실사 계속하기</button>
   </div>
 
   <!-- 보내는 중 / 보냄 -->
@@ -385,19 +416,30 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
     <button class="big plain" data-act="rmClose">닫기</button>
   </div>
 </div>
+<div class="sheet-bg" id="iosBg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="iosHd">
+    <div class="hd" id="iosHd">아이폰 바탕화면에 아이콘 만들기</div>
+    <div class="sendnote"><ol><li>화면 아래(또는 위) 가운데의 <b style="color:var(--fg)">공유 버튼(□↑)</b>을 누릅니다</li><li>목록을 내려 <b style="color:var(--fg)">'홈 화면에 추가'</b>를 누릅니다</li><li>오른쪽 위 <b style="color:var(--fg)">'추가'</b>를 누릅니다</li></ol><p class="tiny" style="margin:8px 0 0">그다음부터는 바탕화면의 SCS 아이콘으로 여세요. (아이폰은 아이콘으로 연 앱과 사파리에 저장되는 내용이 따로입니다)</p></div>
+    <button class="big plain" data-act="iosClose">닫기</button>
+  </div>
+</div>
 <div class="toast" id="toast" hidden><span class="m" id="toastMsg"></span><button id="toastBtn" data-act="undo">취소</button></div>
 
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="data.js"></script>
 <script>
 "use strict";
+/* ===== 카톡 안 브라우저로 열었으면 바깥 브라우저(크롬·삼성 인터넷·사파리)로 넘김 =====
+   카톡 브라우저에는 '홈 화면에 추가'가 없고, 저장 공간도 따로라서 여기서는 앱을 시작하지 않음 */
+const IN_KAKAO = /KAKAOTALK/i.test(navigator.userAgent);
+if (IN_KAKAO) { try { location.href = "kakaotalk://web/openExternal?url=" + encodeURIComponent(location.href) } catch (e) {} }
 /* ===== 설정 =====
    SCRIPT_URL: 구글 Apps Script 웹 앱 주소 (2단계에서 넣음). 비어 있으면 시험판 모드:
    자재목록은 data.js에서 읽고, [보내기]는 엑셀 파일로 내려받음 */
 const CONFIG = {
   SCRIPT_URL: "https://script.google.com/macros/s/AKfycbyhuiMHursNOZZknzEwk7as9JcFmxck1FlwoqMZ89D-I3FcdhCG0b1mfJrdQ2Mk6Hb5Aw/exec",         // 구글 Apps Script 웹 앱 주소 (…/exec)
   SCRIPT_KEY: "93f0816da47f4397",         // 구글 시트 Config 탭의 KEY 값
-  APP_VERSION: "scan 0.5", BIG_QTY: 500 };
+  APP_VERSION: "ver 0.6", BIG_QTY: 500 };
 try { const o = JSON.parse(localStorage.getItem("scs_config") || "null"); if (o && o.url) { CONFIG.SCRIPT_URL = o.url; CONFIG.SCRIPT_KEY = o.key || "" } } catch (e) {}
 try { const q = new URLSearchParams(location.search); if (q.get("api")) { CONFIG.SCRIPT_URL = q.get("api"); CONFIG.SCRIPT_KEY = q.get("key") || ""; localStorage.setItem("scs_config", JSON.stringify({ url: CONFIG.SCRIPT_URL, key: CONFIG.SCRIPT_KEY })) } } catch (e) {}
 
@@ -406,10 +448,10 @@ const KEY = "scs_scan_v1";
 function load(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d } catch (e) { return d } }
 function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true } catch (e) { return false } }
 function del(k) { try { localStorage.removeItem(k) } catch (e) {} }
-const S = Object.assign({ user: "", introSeen: false, session: null, upc: {}, device: "", newMats: [], rmEdits: [], matEdits: [], seq: 0 }, load(KEY, {}));
+const S = Object.assign({ user: "", introSeen: false, session: null, upc: {}, device: "", newMats: [], rmEdits: [], matEdits: [], seq: 0, work: "실사" }, load(KEY, {}));
 if (!S.matEdits) S.matEdits = [];
 if (!S.device) S.device = "D" + Math.random().toString(36).slice(2, 8).toUpperCase();
-function persist() { if (!save(KEY, S)) toast("폰 저장 공간이 부족합니다. [실사 마침] → [보내기]를 먼저 해 주세요", true) }
+function persist() { if (!save(KEY, S)) toast("폰 저장 공간이 부족합니다. [합계 보기] → [PC로 보내기]를 먼저 해 주세요", true) }
 
 /* ===== 데이터 ===== */
 let D = null, MAT = {}, CODE = new Map(), CODES = [], KW = [];
@@ -483,16 +525,38 @@ function buildIndex() {
   CODES.sort((a, b) => b.k.length - a.k.length);
 }
 
+/* ===== 작업 (재고 실사 · 입고 · 출고 · 현장반입) =====
+   지금은 재고 실사만. 나머지는 '준비 중'. 작업마다 맨 윗줄 색이 다름 */
+const WORKS = [{ k: "실사", t: "재고 실사", c: "#38424c", ok: true, d: "창고에 있는 자재를 세어 PC 장부와 맞춥니다" },
+  { k: "입고", t: "입고", c: "#1f5fa8", ok: false }, { k: "출고", t: "출고", c: "#b8650a", ok: false }, { k: "현장반입", t: "현장반입", c: "#2e7d4f", ok: false }];
+const workOf = k => WORKS.find(w => w.k === k) || WORKS[0];
+let workPicked = false;   // 앱을 열 때마다 한 번 작업을 고름 (안 보낸 줄이 있으면 묻지 않고 이어서)
+function renderWork() {
+  const w = workOf(S.work);
+  $("bandMode").innerHTML = esc(w.t) + "<small>▾</small>";
+  document.documentElement.style.setProperty("--work", w.c);
+  try { document.querySelector('meta[name=theme-color]').content = w.c } catch (e) {}
+  $("workList").innerHTML = WORKS.map(x => `<button data-act="pickWork" data-k="${esc(x.k)}" style="--wc:${x.c}"${x.ok ? "" : " disabled"}><b>${esc(x.t)}</b><span>${x.ok ? esc(x.d || "") : "준비 중"}</span></button>`).join("");
+}
+function pickWork(k) {
+  const w = workOf(k); if (!w.ok) return;
+  if (w.k !== S.work && lines().length) { toast("안 보낸 줄이 있습니다. 먼저 [합계 보기] → [PC로 보내기]를 하세요", true); return }
+  S.work = w.k; workPicked = true; persist(); renderWork(); show("scrScan");
+}
+
 /* ===== 화면 전환 ===== */
-const SCREENS = ["scrIntro", "scrName", "scrScan", "scrBusy", "scrPick", "scrSearch", "scrQty", "scrReg", "scrSum", "scrDone"];
+const SCREENS = ["scrIntro", "scrName", "scrWork", "scrScan", "scrBusy", "scrPick", "scrSearch", "scrQty", "scrReg", "scrSum", "scrDone"];
 let cur = "";
 function show(id) {
   cur = id;
   for (const s of SCREENS) $(s).hidden = s !== id;
   $("sumFoot").hidden = id !== "scrSum";
   $("band").hidden = !["scrScan", "scrBusy", "scrPick", "scrSearch", "scrQty", "scrReg", "scrSum"].includes(id);
+  if (id === "scrWork") renderWork();
   $("bandEnd").hidden = id === "scrSum" || !lines().length;
   $("bandWho").textContent = S.user ? S.user + " ▾" : "";
+  $("bandVer").textContent = CONFIG.APP_VERSION;
+  syncInstall();
   if (id === "scrScan") { lastScan = null; camOn() } else camOff();
   window.scrollTo(0, 0);
   armBack();
@@ -512,7 +576,8 @@ function goBack() {
     case "scrReg": regBack(); return true;
     case "scrPick": case "scrSearch": case "scrSum": show("scrScan"); return true;
     case "scrBusy": return true;
-    case "scrName": if (S.user) { show("scrScan"); return true } return false;
+    case "scrName": if (S.user) { show(workPicked ? "scrScan" : "scrWork"); return true } return false;
+    case "scrWork": if (workPicked) { show("scrScan"); return true } return false;
     case "scrScan": if (replacing) { replacing = null; show(backAfterEdit); if (backAfterEdit === "scrSum") renderSum(); return true } return false;
     default: return false;
   }
@@ -526,7 +591,7 @@ window.addEventListener("popstate", () => {
 
 /* ===== 실사 줄 ===== */
 function lines() { return S.session ? S.session.lines : [] }
-function ensureSession() { if (!S.session) S.session = { id: "S" + Date.now().toString(36).toUpperCase(), mode: "실사", startedAt: new Date().toISOString(), lines: [] } }
+function ensureSession() { if (!S.session) S.session = { id: "S" + Date.now().toString(36).toUpperCase(), mode: S.work || "실사", startedAt: new Date().toISOString(), lines: [] } }
 function lineDesc(l) {
   const m = MAT[l.mat];
   if (l.cond === "개봉품") return "개봉품 " + fmt(l.rem) + " " + (m ? m.u : "");
@@ -947,13 +1012,12 @@ function lineRow(l) {
 function renderScan() {
   const ls = lines();
   $("replaceNote").hidden = !replacing;
-  const r = ls.slice(-5).reverse();
-  $("recentBox").innerHTML = `<h3><span>방금 저장한 것 · 누르면 수정합니다</span><span>${ls.length ? "모두 " + ls.length + "줄" : ""}</span></h3>` +
-    (r.length ? r.map(lineRow).join("") : `<div class="empty">아직 없습니다. 라벨을 비춰 보세요</div>`) +
-    (ls.length > 5 ? `<button class="ln" data-act="finish" style="justify-content:center;color:var(--accent)">전체 보기</button>` : "");
+  const r = ls.slice().reverse();   // 저장한 것 모두 (최근 것이 위, 입력한 줄마다)
+  $("recentBox").innerHTML = `<h3><span>저장한 것 · 누르면 수정합니다</span><span>${ls.length ? "모두 " + ls.length + "줄" : ""}</span></h3>` +
+    (r.length ? r.map(lineRow).join("") : `<div class="empty">아직 없습니다. 라벨을 비춰 보세요</div>`);
   const un = S.session && S.session.resumed && ls.length;
   $("unsentNote").hidden = !un;
-  if (un) $("unsentNote").innerHTML = `<b>아직 안 보낸 실사 ${ls.length}줄</b>이 있습니다. 이어서 찍고, 다 끝나면 [실사 마침] → [보내기]`;
+  if (un) $("unsentNote").innerHTML = `<b>아직 안 보낸 실사 ${ls.length}줄</b>이 있습니다. 이어서 세고, 다 끝나면 [합계 보기] → [PC로 보내기]`;
   $("bandEnd").hidden = !ls.length;
 }
 
@@ -990,8 +1054,8 @@ function renderSum() {
       (op ? `<div class="chips">${arr.map(l => `<button class="chip num" data-act="line" data-id="${esc(l.id)}">${esc(lineDesc(l))}<small>${esc(new Date(l.t).toTimeString().slice(0, 5))}</small></button>`).join("")}</div>` : "") + `</div>`;
   }
   $("sumList").innerHTML = h || `<div class="empty" style="border:0">찍기로 돌아가서 라벨을 비춰 보세요</div>`;
-  $("sendBtn").textContent = ls.length ? "보내기 (" + ls.length + "줄)" : "보내기";
-  $("verLine").textContent = CONFIG.APP_VERSION + " · 자재목록 " + (D.version || "") + (CONFIG.SCRIPT_URL ? "" : " · 시험판: 보내기 = 엑셀 내려받기");
+  $("sendBtn").textContent = ls.length ? "PC로 보내기 (" + ls.length + "줄)" : "PC로 보내기";
+  $("verLine").textContent = CONFIG.APP_VERSION + " · 자재목록 " + (D.version || "") + (CONFIG.SCRIPT_URL ? "" : " · 시험판: PC로 보내기 = 엑셀 내려받기");
 }
 
 /* ===== 보내기 ===== */
@@ -1035,7 +1099,7 @@ async function send() {
       S.rmEdits = [];
     }
   } catch (e) {
-    $("doneBox").innerHTML = `<p class="say">보내지 못했습니다</p><p class="tiny">센 것은 폰에 그대로 있습니다. 인터넷을 확인하고 다시 누르세요</p><button class="big primary" data-act="send">다시 보내기</button><button class="big plain" data-act="toSum">정리 화면으로</button>`;
+    $("doneBox").innerHTML = `<p class="say">보내지 못했습니다</p><p class="tiny">센 것은 폰에 그대로 있습니다. 인터넷을 확인하고 다시 누르세요</p><button class="big primary" data-act="send">다시 보내기</button><button class="big plain" data-act="toSum">합계 리스트로</button>`;
     return;
   }
   const g = new Set(ls.map(l => l.mat || l.id)).size;
@@ -1043,7 +1107,9 @@ async function send() {
   for (const l of ls) if (!l.mat) del("scs_photo_" + l.id);
   for (const n of regs) if (n.synced) del("scs_photo_reg_" + n.tmp);
   S.session = null; persist();
-  $("doneBox").innerHTML = `<p class="say" style="color:var(--ok)">보냈습니다</p><p class="sub" style="margin:0">품목 ${g}개 · ${ls.length}줄${regs.length ? " · 새 자재 " + regs.length + "개" : ""}${CONFIG.SCRIPT_URL ? "" : "<br>(시험판: 엑셀 파일로 내려받았습니다)"}</p><button class="big primary" data-act="restart">새로 시작</button>`;
+  $("doneBox").innerHTML = `<p class="say" style="color:var(--ok)">PC로 보냈습니다</p><p class="sub" style="margin:0">품목 ${g}개 · ${ls.length}줄${regs.length ? " · 새 자재 " + regs.length + "개" : ""}${CONFIG.SCRIPT_URL ? "" : "<br>(시험판: 엑셀 파일로 내려받았습니다)"}</p>` +
+    `<div class="sendnote"><b>아직 재고 장부에는 들어가지 않았습니다.</b><br>사무실 PC 엑셀에서:<ol><li>대시보드 [폰 작업 받기]</li><li>이번 실사를 골라 [재고조정 목록에 담기]</li><li>재고조정 창에서 확인하고 저장</li></ol></div>` +
+    `<button class="big primary" data-act="restart">새로 시작</button>`;
 }
 
 /* ===== 새 자재 등록 (현장) =====
@@ -1234,7 +1300,7 @@ function openReg(o) {
   $("rgPq").value = "";
   if (edit) { regFill({ name: m.n, model: m.m, desc: m.s, mfr: m.f, remark: m.r, pq: m.pq, pu: m.pu, u: m.u }); for (const [id] of FIELDS) regState.auto[id] = false }
   else if (lab) { const p = parseLabel(lastOcr, o.model || "", lastScan, lastOcrAll); regFill(p); regState.u = p.u; regState.pu = p.pu }
-  $("regSay").textContent = edit ? "등록 내용 수정" : lab ? "새 자재 등록" : "라벨 없는 자재 등록";
+  $("regSay").textContent = edit ? "등록 내용 수정" : "새 자재 등록";
   $("regSub").textContent = edit ? "엑셀 자재목록에 들어가기 전까지 수정할 수 있습니다"
     : lab ? (lastOcr.length || o.model ? "칸 이름을 누르고 아래 글자를 고르면 그 칸이 바뀝니다" : "라벨 사진을 찍으면 칸이 채워집니다")
     : "자재 사진을 찍으면 찍힌 글자가 선택지로 나옵니다";
@@ -1631,6 +1697,10 @@ document.addEventListener("click", e => {
     case "send": send(); break;
     case "toSum": renderSum(); show("scrSum"); break;
     case "restart": start(); break;
+    case "work": renderWork(); show("scrWork"); break;
+    case "pickWork": pickWork(b.dataset.k); break;
+    case "install": doInstall(); break;
+    case "iosClose": $("iosBg").hidden = true; break;
     case "noLabel": lastPhoto = null; lastOcr = []; lastOcrAll = []; lastScan = null; lastCanvas = null; openReg({ mode: "nolabel" }); break;
     case "regFromPhoto": openReg({ mode: "label", from: "사진" }); break;
     case "regTakePhoto": $("regFile").click(); break;
@@ -1658,10 +1728,30 @@ function renderNames() { $("nameList").innerHTML = (D.people || []).map(n => `<b
 function start() {
   if (!S.introSeen) { show("scrIntro"); return }
   if (!S.user) { renderNames(); show("scrName"); return }
-  show("scrScan");
+  if (!workPicked && !lines().length) { renderWork(); show("scrWork"); return }
+  workPicked = true; show("scrScan");
 }
+/* ===== 바탕화면에 아이콘 만들기 =====
+   갤럭시(크롬·삼성 인터넷): 설치 창을 바로 띄움 / 아이폰: '공유 → 홈 화면에 추가' 안내 */
+let installEvt = null;
+const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const isStandalone = () => { try { return matchMedia("(display-mode: standalone)").matches || navigator.standalone === true } catch (e) { return false } };
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; syncInstall() });
+window.addEventListener("appinstalled", () => { installEvt = null; syncInstall(); toast("바탕화면에 SCS 아이콘을 만들었습니다") });
+function syncInstall() { const on = !isStandalone() && (!!installEvt || IS_IOS); for (const id of ["installLink", "installLink2"]) { const x = $(id); if (x) x.hidden = !on } }
+async function doInstall() {
+  if (installEvt) { const e = installEvt; installEvt = null; try { await e.prompt(); await e.userChoice } catch (err) {} syncInstall(); return }
+  if (IS_IOS) { $("iosBg").hidden = false; return }
+  toast("이 브라우저는 바로 만들 수 없습니다. 크롬이나 삼성 인터넷의 메뉴(⋮) → '홈 화면에 추가'를 쓰세요", true);
+}
+if ("serviceWorker" in navigator && location.protocol === "https:") { try { navigator.serviceWorker.register("sw.js") } catch (e) {} }
 (async () => {
+  if (IN_KAKAO) {   // 바깥 브라우저로 넘어가지 않았으면 직접 여는 방법을 안내
+    document.body.innerHTML = '<div style="padding:28px 20px;font:17px/1.6 sans-serif"><b>바깥 브라우저로 여는 중입니다…</b><p>자동으로 안 넘어가면 카톡 화면 오른쪽 위(또는 아래)의 <b>⋮ / 공유</b> 버튼 → <b>"다른 브라우저로 열기"</b>를 누르세요.</p><p style="color:#777;font-size:14px">카톡 안에서는 앱이 제대로 동작하지 않습니다 (바탕화면 아이콘 만들기·저장).</p></div>';
+    return;
+  }
   try { $("fileLink").hidden = !matchMedia("(pointer: fine)").matches } catch (e) {}
+  renderWork();
   if (!(await loadData())) return;
   if (S.session && S.session.lines.length) S.session.resumed = true;
   persist(); start();
