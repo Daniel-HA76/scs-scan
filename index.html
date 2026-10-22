@@ -1,0 +1,1378 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#38424c">
+<title>SCS 재고 스캔</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;500;600&display=swap">
+<style>
+/* 레이아웃: 폰 한 화면 = 한 가지 일. 위 띠(작업 구분) + 본문 + 아래 고정 버튼 */
+:root {
+  --bg: #f3f1ec; --card: #ffffff; --fg: #1d2126; --muted: #69707a; --line: #dcd8cf;
+  --mode: #38424c; --on-mode: #ffffff;           /* 실사 = 회색 (입고 파랑 / 출고 주황은 다음 단계) */
+  --accent: #1f5fa8; --on-accent: #ffffff;
+  --ok: #1e7a4c; --ok-bg: #e2f2e8; --warn: #9a5a00; --warn-bg: #fbefd9; --bad: #b3261e; --bad-bg: #fbe4e2;
+  --key: #e8e5de; --shade: rgba(20,24,28,.45);
+  --f-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --f-code: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #15181b; --card: #1f2327; --fg: #eceae5; --muted: #a2a8af; --line: #353a40;
+  --mode: #4a5561; --on-mode: #ffffff; --accent: #5b9be0; --on-accent: #0d1a28;
+  --ok: #6fcf98; --ok-bg: #17321f; --warn: #f0b45a; --warn-bg: #3a2a10; --bad: #f28b82; --bad-bg: #3b1714;
+  --key: #2b3035; --shade: rgba(0,0,0,.6); color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #15181b; --card: #1f2327; --fg: #eceae5; --muted: #a2a8af; --line: #353a40;
+  --mode: #4a5561; --on-mode: #ffffff; --accent: #5b9be0; --on-accent: #0d1a28;
+  --ok: #6fcf98; --ok-bg: #17321f; --warn: #f0b45a; --warn-bg: #3a2a10; --bad: #f28b82; --bad-bg: #3b1714;
+  --key: #2b3035; --shade: rgba(0,0,0,.6); color-scheme: dark }
+* { box-sizing: border-box }
+html, body { height: 100% }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 var(--f-body); -webkit-tap-highlight-color: transparent }
+[hidden] { display: none !important }
+button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px }
+.wrap { max-width: 480px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column }
+.code { font-family: var(--f-code); letter-spacing: .01em }
+.num { font-variant-numeric: tabular-nums }
+
+.band { background: var(--mode); color: var(--on-mode); display: flex; align-items: center; gap: 8px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px));
+  position: sticky; top: 0; z-index: 5 }
+.band .mode { font-weight: 600; font-size: 17px }
+.band .who { font-size: 14px; opacity: .85; padding: 6px 8px; border-radius: 8px }
+.band .sp { flex: 1 }
+.band .end { background: var(--on-mode); color: var(--mode); font-weight: 600; padding: 8px 16px; border-radius: 10px }
+
+.main { flex: 1; padding: 14px max(16px, env(safe-area-inset-right, 0px)) 16px max(16px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 12px }
+.say { font-size: 20px; font-weight: 600; text-align: center; margin: 2px 0 0 }
+.sub { color: var(--muted); font-size: 14px; text-align: center; margin: -6px 0 0 }
+
+.cam { position: relative; width: 100%; height: 42vh; min-height: 220px; max-height: 360px; border-radius: 14px; overflow: hidden; background: #0d0f11 }
+#reader { width: 100%; height: 100% }
+#reader video { width: 100% !important; height: 100% !important; object-fit: cover }
+#reader img[alt="Info icon"], #reader__dashboard { display: none !important }
+.cam-msg { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 20px; color: #e9ecef; font-size: 15px }
+.cam-flash { position: absolute; left: 10px; right: 10px; bottom: 10px; background: rgba(0,0,0,.72); color: #fff; border-radius: 10px; padding: 8px 12px; font-size: 14px }
+
+.big { width: 100%; min-height: 60px; border-radius: 14px; font-size: 19px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 10px }
+.primary { background: var(--accent); color: var(--on-accent) }
+.plain { background: var(--card); border: 1.5px solid var(--line) }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px }
+.link { color: var(--accent); font-size: 15px; padding: 8px 4px; text-decoration: underline; text-underline-offset: 3px }
+.tiny { font-size: 13px; color: var(--muted) }
+.center { text-align: center }
+
+.notice { background: var(--warn-bg); color: var(--warn); border-radius: 12px; padding: 10px 14px; font-size: 15px }
+.notice b { font-weight: 600 }
+
+.recent { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden }
+.recent h3 { margin: 0; padding: 10px 14px 6px; font-size: 13px; font-weight: 500; color: var(--muted); display: flex; justify-content: space-between }
+.ln { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 14px; border-top: 1px solid var(--line); min-height: 52px }
+.ln .t { flex: 1; min-width: 0 }
+.ln .t b { display: block; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.ln .t span { display: block; font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.ln .q { font-weight: 600; font-size: 18px; white-space: nowrap }
+.empty { padding: 14px; color: var(--muted); font-size: 14px; border-top: 1px solid var(--line) }
+
+.item { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px }
+.item .nm { font-size: 20px; font-weight: 600; line-height: 1.3 }
+.item .sp2 { color: var(--muted); font-size: 15px; margin-top: 2px; overflow-wrap: anywhere }
+.item .md { margin-top: 8px; font-size: 16px; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline }
+.item .md .code { background: var(--key); border-radius: 6px; padding: 1px 8px; overflow-wrap: anywhere }
+.item .sofar { margin-top: 8px; font-size: 14px; color: var(--muted) }
+.how { font-size: 13px; color: var(--ok); font-weight: 500 }
+
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
+.seg button { min-height: 50px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card); font-size: 17px; font-weight: 500 }
+.seg button[aria-pressed="true"] { border-color: var(--fg); background: var(--fg); color: var(--bg) }
+
+.qty { display: flex; align-items: baseline; justify-content: center; gap: 10px; background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 8px }
+.qty .v { font-size: 44px; font-weight: 600; min-width: 1ch; line-height: 1.1 }
+.qty .v.ph { color: var(--line) }
+.qty .u { font-size: 18px; color: var(--muted) }
+.qlabel { font-size: 15px; color: var(--muted); text-align: center; margin-bottom: -6px }
+.pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px }
+.pad button { min-height: 56px; border-radius: 12px; background: var(--key); font-size: 24px; font-weight: 500 }
+.pad button.fn { font-size: 16px }
+
+.warnbox { background: var(--warn-bg); color: var(--warn); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px }
+.warnbox b { font-size: 17px }
+
+.toast { position: fixed; left: 50%; transform: translateX(-50%); top: calc(68px + env(safe-area-inset-top, 0px)); width: min(448px, calc(100% - 32px));
+  background: var(--ok-bg); color: var(--ok); border-radius: 14px; padding: 12px 14px; display: flex; align-items: center; gap: 10px; z-index: 30; box-shadow: 0 6px 20px rgba(0,0,0,.18) }
+.toast .m { flex: 1; font-size: 17px; font-weight: 600; color: var(--fg) }
+.toast.err { background: var(--bad-bg) }
+.toast button { background: var(--card); border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 16px; font-weight: 600 }
+
+.sheet-bg { position: fixed; inset: 0; background: var(--shade); z-index: 20; display: flex; align-items: flex-end; justify-content: center }
+.sheet { background: var(--bg); width: 100%; max-width: 480px; border-radius: 18px 18px 0 0; padding: 16px max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 10px }
+.sheet .hd { font-size: 15px; color: var(--muted) }
+.danger { background: var(--bad-bg); color: var(--bad) }
+
+.cands { display: flex; flex-direction: column; gap: 8px }
+.cand { text-align: left; background: var(--card); border: 1.5px solid var(--line); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px }
+.cand b { font-weight: 600 }
+.cand span { font-size: 14px; color: var(--muted); overflow-wrap: anywhere }
+.cand .code { color: var(--fg); font-size: 15px }
+input.find { width: 100%; font: inherit; font-size: 18px; padding: 14px 16px; border-radius: 14px; border: 1.5px solid var(--line); background: var(--card); color: var(--fg) }
+.photo { width: 100%; max-height: 220px; object-fit: contain; border-radius: 12px; background: var(--key) }
+
+.grp { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden }
+.grp > button { width: 100%; text-align: left; padding: 12px 14px; display: flex; gap: 10px; align-items: center }
+.grp .t { flex: 1; min-width: 0 }
+.grp .t b { display: block; font-weight: 600 }
+.grp .t span { display: block; font-size: 13px; color: var(--muted); overflow-wrap: anywhere }
+.grp .tot { text-align: right; font-weight: 600; white-space: nowrap }
+.grp .tot small { display: block; font-weight: 400; font-size: 13px; color: var(--muted) }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 14px 12px }
+.chip { border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 16px; background: var(--bg) }
+.chip small { color: var(--muted); font-size: 12px; margin-left: 4px }
+.foot { position: sticky; bottom: 0; background: var(--bg); padding: 10px max(16px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px }
+
+.intro { display: flex; flex-direction: column; gap: 12px; margin-top: 8px }
+.step { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: flex; gap: 14px; align-items: flex-start }
+.step .n { flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--mode); color: var(--on-mode); display: flex; align-items: center; justify-content: center; font-weight: 600 }
+.step p { margin: 0; font-size: 17px }
+.step p small { display: block; font-size: 14px; color: var(--muted); margin-top: 2px }
+.names { display: grid; grid-template-columns: 1fr 1fr; gap: 10px }
+.names button { min-height: 64px; border-radius: 14px; background: var(--card); border: 1.5px solid var(--line); font-size: 19px; font-weight: 500 }
+.busy { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 40px 0; text-align: center }
+.spin { width: 42px; height: 42px; border-radius: 50%; border: 4px solid var(--line); border-top-color: var(--accent); animation: sp 0.9s linear infinite }
+@keyframes sp { to { transform: rotate(360deg) } }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 3s } }
+.ver { font-size: 12px; color: var(--muted); text-align: center; padding: 6px 0 2px }
+.form { display: flex; flex-direction: column; gap: 14px }
+.fld { display: flex; flex-direction: column; gap: 6px }
+.fld > span { font-size: 14px; color: var(--muted) }
+.fld > span b { color: var(--bad); font-weight: 500 }
+input.txt, textarea.txt { width: 100%; font: inherit; font-size: 17px; padding: 12px 14px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card); color: var(--fg) }
+textarea.txt { min-height: 72px; resize: vertical; line-height: 1.4 }
+input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
+.chips2 { display: flex; flex-wrap: wrap; gap: 8px }
+.chips2 button { border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 15px; background: var(--card); min-height: 40px }
+.chips2 button[aria-pressed="true"] { border-color: var(--fg); background: var(--fg); color: var(--bg) }
+.ocrbox { background: var(--card); border: 1.5px dashed var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 10px }
+.ocrbox .hd { font-size: 14px; color: var(--muted) }
+.ocrbox .hd b { color: var(--fg); font-weight: 600 }
+.tgt { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px }
+.tgt button { min-height: 40px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--bg); font-size: 15px }
+.tgt button[aria-pressed="true"] { border-color: var(--fg); background: var(--fg); color: var(--bg) }
+.olines { display: flex; flex-wrap: wrap; gap: 8px }
+.olines button { text-align: left; border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 12px; font-size: 15px; background: var(--bg); min-height: 40px; max-width: 100%; overflow-wrap: anywhere }
+.olines button.used { opacity: .45; text-decoration: line-through }
+.fld.on > span { color: var(--fg); font-weight: 600 }
+.fld.on .txt { border-color: var(--fg) }
+.chips2 button.code { font-family: var(--f-code) }
+.row2b { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end }
+.okbox { background: var(--ok-bg); color: var(--ok); border-radius: 12px; padding: 10px 14px; font-size: 15px }
+.errline { color: var(--bad); font-size: 15px; min-height: 0 }
+.rmline { margin-top: 8px; font-size: 14px; color: var(--muted); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap }
+.rmline .link { font-size: 14px; padding: 4px 2px }
+.tag { display: inline-block; font-size: 12px; border-radius: 6px; padding: 1px 6px; background: var(--warn-bg); color: var(--warn); margin-left: 6px; vertical-align: 2px }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="band" id="band" hidden>
+    <span class="mode" id="bandMode">재고 실사</span>
+    <button class="who" id="bandWho" data-act="rename" aria-label="이름 바꾸기"></button>
+    <span class="sp"></span>
+    <button class="end" id="bandEnd" data-act="finish">끝</button>
+  </header>
+
+  <!-- 처음 안내 -->
+  <section class="main" id="scrIntro" hidden>
+    <p class="say" style="margin-top:12px">재고 실사, 이렇게 해요</p>
+    <div class="intro">
+      <div class="step"><span class="n">1</span><p>라벨을 카메라에 비추세요<small>바코드가 없으면 [찰칵]을 누르세요</small></p></div>
+      <div class="step"><span class="n">2</span><p>눈에 보이는 개수를 누르고 [넣기]<small>같은 물건이 또 나오면 또 찍으세요. 알아서 더해요</small></p></div>
+      <div class="step"><span class="n">3</span><p>다 세면 위의 [끝] → [보내기]<small>보내기 전에는 언제든 고칠 수 있어요</small></p></div>
+    </div>
+    <span class="sp" style="flex:1"></span>
+    <button class="big primary" data-act="introOk">시작하기</button>
+  </section>
+
+  <!-- 이름 고르기 -->
+  <section class="main" id="scrName" hidden>
+    <p class="say" style="margin-top:12px">누구세요?</p>
+    <p class="sub" style="margin-top:0">한 번만 고르면 다음부터는 묻지 않아요</p>
+    <div class="names" id="nameList"></div>
+  </section>
+
+  <!-- 찍기 -->
+  <section class="main" id="scrScan" hidden>
+    <div class="notice" id="replaceNote" hidden><b>바꿀 품목을 찍으세요.</b> <button class="link" data-act="cancelReplace">그만두기</button></div>
+    <div class="notice" id="unsentNote" hidden></div>
+    <p class="say" id="scanSay">라벨을 네모 안에 비추세요</p>
+    <div class="cam">
+      <div id="reader"></div>
+      <div class="cam-msg" id="camMsg">카메라를 켜는 중…</div>
+      <div class="cam-flash" id="camFlash" hidden></div>
+    </div>
+    <button class="big primary" data-act="snap">바코드가 없으면 찰칵</button>
+    <div class="center"><button class="link" data-act="search">목록에서 찾기</button><button class="link" data-act="noLabel">라벨 없는 물건 등록</button><button class="link" data-act="pickFile" id="fileLink" hidden>사진 파일에서</button></div>
+    <div class="recent" id="recentBox"></div>
+    <input type="file" id="fileSnap" accept="image/*" capture="environment" hidden>
+    <div id="fileScan" hidden></div>
+  </section>
+
+  <!-- 글자 읽는 중 -->
+  <section class="main" id="scrBusy" hidden>
+    <div class="busy"><div class="spin" aria-hidden="true"></div><p class="say" id="busySay">라벨 글자를 읽는 중…</p><p class="tiny" id="busySub">처음 한 번은 준비하느라 조금 더 걸려요</p></div>
+  </section>
+
+  <!-- 후보 고르기 -->
+  <section class="main" id="scrPick" hidden>
+    <p class="say" id="pickSay">어느 거예요?</p>
+    <p class="sub" id="pickSub"></p>
+    <img class="photo" id="pickPhoto" alt="찍은 라벨" hidden>
+    <div class="cands" id="pickList"></div>
+    <button class="big primary" data-act="regFromPhoto" id="regFromPhotoBtn">목록에 없어요 · 새로 등록</button>
+    <div class="row2">
+      <button class="big plain" data-act="backScan">다시 찍기</button>
+      <button class="big plain" data-act="search">목록에서 찾기</button>
+    </div>
+    <div class="center"><button class="link" data-act="unknown">등록하지 않고 사진만 남기기</button></div>
+  </section>
+
+  <!-- 새 자재 등록 -->
+  <section class="main" id="scrReg" hidden>
+    <p class="say" id="regSay">새 자재 등록</p>
+    <p class="sub" id="regSub">읽은 글자가 틀리면 눌러서 고치세요</p>
+    <img class="photo" id="regPhoto" alt="라벨 사진" hidden>
+    <button class="big plain" data-act="regTakePhoto" id="regPhotoBtn">라벨 사진 찍기</button>
+    <div class="notice" id="regDup" hidden></div>
+    <div class="ocrbox" id="rgOcr" hidden>
+      <p class="hd" id="rgOcrHd">사진에서 읽은 글자예요. 누르면 <b id="rgTgtName">규격</b> 칸에 들어가요</p>
+      <div class="tgt" id="rgTgt"></div>
+      <div class="olines" id="rgLines"></div>
+    </div>
+    <div class="form">
+      <label class="fld" id="fdModel"><span>모델명 (품번)</span><input class="txt code" id="rgModel" autocomplete="off" autocapitalize="characters" spellcheck="false"></label>
+      <div class="chips2" id="rgModelCands"></div>
+      <div class="fld"><span>제조사</span><div class="chips2" id="rgMfrChips"></div><input class="txt" id="rgMfr" autocomplete="off" placeholder="목록에 없으면 직접 입력"></div>
+      <div class="fld" id="fdName"><span>품명 <b>*</b></span><div class="chips2" id="rgNameChips"></div><input class="txt" id="rgName" list="rgNameList" autocomplete="off" placeholder="예: Patch Cord"><datalist id="rgNameList"></datalist></div>
+      <label class="fld" id="fdSpec"><span>규격 <b>*</b> (라벨 문장 그대로 두면 돼요)</span><textarea class="txt" id="rgSpec" spellcheck="false"></textarea></label>
+      <div class="fld"><span>단위 (하나씩 셀 때)</span><div class="chips2" id="rgUnitChips"></div></div>
+      <div class="fld"><span>포장 (봉지·박스로 올 때)</span><div class="chips2" id="rgPuChips"></div></div>
+      <label class="fld"><span>포장 하나에 든 양 (예: 100개입이면 100, 305m 박스면 305)</span><input class="txt" id="rgPq" inputmode="decimal" autocomplete="off" placeholder="포장이 없으면 비워 두세요"></label>
+      <label class="fld" id="fdRemark"><span>비고</span><input class="txt" id="rgRemark" autocomplete="off" placeholder="예: 3층 IDF용, 박스에 번호 적힘"></label>
+      <p class="errline" id="rgErr" hidden></p>
+    </div>
+    <div class="row2">
+      <button class="big plain" data-act="regCancel">그만두기</button>
+      <button class="big primary" data-act="regSave">등록하고 세기</button>
+    </div>
+    <input type="file" id="regFile" accept="image/*" capture="environment" hidden>
+  </section>
+
+  <!-- 검색 -->
+  <section class="main" id="scrSearch" hidden>
+    <p class="say">이름으로 찾기</p>
+    <input class="find" id="findBox" type="search" autocomplete="off" placeholder="예: 모듈 팬듀잇 캣6a" aria-label="찾을 품목">
+    <p class="tiny center" id="findCount" style="margin:0">한글로도 찾아요. 띄어 쓰면 모두 들어간 것만 나와요</p>
+    <div class="cands" id="findList"></div>
+    <button class="big plain" data-act="backScan">찍기로 돌아가기</button>
+  </section>
+
+  <!-- 수량 -->
+  <section class="main" id="scrQty" hidden>
+    <p class="say" id="qtySay">몇 개예요?</p>
+    <div class="item" id="qtyItem"></div>
+    <img class="photo" id="qtyPhoto" alt="모르는 품목 사진" hidden>
+    <div class="seg" id="condSeg"></div>
+    <p class="qlabel" id="qtyLabel"></p>
+    <div class="qty"><span class="v num ph" id="qtyVal">0</span><span class="u" id="qtyUnit">EA</span></div>
+    <div class="warnbox" id="qtyWarn" hidden><b id="qtyWarnMsg"></b><div class="row2"><button class="big plain" data-act="warnNo">다시 누르기</button><button class="big primary" data-act="warnYes">맞아요</button></div></div>
+    <div class="pad" id="pad">
+      <button>1</button><button>2</button><button>3</button>
+      <button>4</button><button>5</button><button>6</button>
+      <button>7</button><button>8</button><button>9</button>
+      <button class="fn" data-k="clr">처음부터</button><button>0</button><button class="fn" data-k="bs">한 칸 지움</button>
+    </div>
+    <div class="row2">
+      <button class="big plain" data-act="qtyNo" id="qtyNoBtn">아니에요</button>
+      <button class="big primary" data-act="qtyOk" id="qtyOkBtn">넣기</button>
+    </div>
+  </section>
+
+  <!-- 정리 (끝) -->
+  <section class="main" id="scrSum" hidden>
+    <p class="say">센 것 정리</p>
+    <p class="sub" id="sumSub"></p>
+    <div id="sumList" style="display:flex;flex-direction:column;gap:10px"></div>
+    <p class="ver" id="verLine"></p>
+  </section>
+  <div class="foot" id="sumFoot" hidden>
+    <button class="big primary" data-act="send" id="sendBtn">보내기</button>
+    <button class="big plain" data-act="backScan">계속 찍기</button>
+  </div>
+
+  <!-- 보내는 중 / 보냄 -->
+  <section class="main" id="scrDone" hidden>
+    <div class="busy" id="doneBox"></div>
+  </section>
+</div>
+
+<div class="sheet-bg" id="sheetBg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetHd">
+    <div class="hd" id="sheetHd">이 줄 고치기</div>
+    <div class="item" id="sheetItem"></div>
+    <button class="big plain" data-act="lnQty">수량 바꾸기</button>
+    <button class="big plain" data-act="lnItem">품목 바꾸기</button>
+    <button class="big danger" data-act="lnDel">지우기</button>
+    <button class="big plain" data-act="sheetClose">닫기</button>
+  </div>
+</div>
+<div class="sheet-bg" id="rmBg" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="rmHd">
+    <div class="hd" id="rmHd">비고 고치기</div>
+    <div class="item" id="rmItem"></div>
+    <textarea class="txt" id="rmText" spellcheck="false" placeholder="예: 3층 창고 왼쪽 선반, 박스 찢어짐"></textarea>
+    <button class="big primary" data-act="rmSave">비고 저장</button>
+    <button class="big plain" data-act="rmClose">닫기</button>
+  </div>
+</div>
+<div class="toast" id="toast" hidden><span class="m" id="toastMsg"></span><button id="toastBtn" data-act="undo">취소</button></div>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="data.js"></script>
+<script>
+"use strict";
+/* ===== 설정 =====
+   SCRIPT_URL: 구글 Apps Script 웹 앱 주소 (2단계에서 넣음). 비어 있으면 시험판 모드:
+   자재목록은 data.js에서 읽고, [보내기]는 엑셀 파일로 내려받음 */
+const CONFIG = {
+  SCRIPT_URL: "https://script.google.com/macros/s/AKfycbyhuiMHursNOZZknzEwk7as9JcFmxck1FlwoqMZ89D-I3FcdhCG0b1mfJrdQ2Mk6Hb5Aw/exec",         // 구글 Apps Script 웹 앱 주소 (…/exec)
+  SCRIPT_KEY: "93f0816da47f4397",         // 구글 시트 Config 탭의 KEY 값
+  APP_VERSION: "scan 0.3", BIG_QTY: 500 };
+try { const o = JSON.parse(localStorage.getItem("scs_config") || "null"); if (o && o.url) { CONFIG.SCRIPT_URL = o.url; CONFIG.SCRIPT_KEY = o.key || "" } } catch (e) {}
+try { const q = new URLSearchParams(location.search); if (q.get("api")) { CONFIG.SCRIPT_URL = q.get("api"); CONFIG.SCRIPT_KEY = q.get("key") || ""; localStorage.setItem("scs_config", JSON.stringify({ url: CONFIG.SCRIPT_URL, key: CONFIG.SCRIPT_KEY })) } } catch (e) {}
+
+/* ===== 저장 (폰 브라우저 안) ===== */
+const KEY = "scs_scan_v1";
+function load(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d } catch (e) { return d } }
+function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true } catch (e) { return false } }
+function del(k) { try { localStorage.removeItem(k) } catch (e) {} }
+const S = Object.assign({ user: "", introSeen: false, session: null, upc: {}, device: "", newMats: [], rmEdits: [], seq: 0 }, load(KEY, {}));
+if (!S.device) S.device = "D" + Math.random().toString(36).slice(2, 8).toUpperCase();
+function persist() { if (!save(KEY, S)) toast("폰 저장 공간이 부족해요. [끝] → [보내기]를 먼저 해 주세요", true) }
+
+/* ===== 데이터 ===== */
+let D = null, MAT = {}, CODE = new Map(), CODES = [], KW = [];
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = n => (Math.round(n * 100) / 100).toLocaleString("ko-KR");
+// 품번 비교용: 영문·숫자만, 대문자, 헷갈리는 글자 통일 (O=0, I=1, L=1)
+function norm(s) { return String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/O/g, "0").replace(/[IL]/g, "1") }
+const canOpen = m => !!(m && m.pu && m.pq > 0);
+
+/* ===== 구글 시트 창구 ===== */
+async function apiGet(action, ms = 9000) {
+  const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), ms);
+  try {
+    const r = await fetch(CONFIG.SCRIPT_URL + "?action=" + action + "&key=" + encodeURIComponent(CONFIG.SCRIPT_KEY), { signal: ctl.signal });
+    const j = await r.json(); if (!j || !j.ok) throw new Error((j && j.error) || "fail"); return j;
+  } finally { clearTimeout(tm) }
+}
+async function apiPost(body, ms = 30000) {
+  const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), ms);
+  try {
+    const r = await fetch(CONFIG.SCRIPT_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, signal: ctl.signal,
+      body: JSON.stringify(Object.assign({ key: CONFIG.SCRIPT_KEY, device: S.device, user: S.user }, body)) });
+    const j = await r.json(); if (!j || !j.ok) throw new Error((j && j.error) || "fail"); return j;
+  } finally { clearTimeout(tm) }
+}
+
+// 자재목록: 창구가 있으면 '목록 버전'만 먼저 묻고, 바뀌었을 때만 전체를 받음. 안 되면 지난번 목록
+async function loadData() {
+  let d = null;
+  if (CONFIG.SCRIPT_URL) {
+    const cache = load("scs_data_cache", null);
+    try {
+      const v = await apiGet("version", 6000);
+      if (cache && cache.version === v.version) d = cache;
+      else { d = await apiGet("data", 15000); save("scs_data_cache", d) }
+    } catch (e) { d = cache; if (d) setTimeout(() => flash("인터넷이 안 돼서 지난번 목록으로 해요"), 600) }
+  }
+  if (!d) d = window.SCS_DATA || load("scs_data_cache", null);
+  if (!d) { document.body.innerHTML = '<p style="padding:24px">자재목록을 불러오지 못했어요. 인터넷을 확인하고 다시 열어 주세요.</p>'; return false }
+  D = d;
+  // 창구 목록에 이미 들어간 새 자재는 폰 목록에서 정리, 아직 안 들어간 것은 목록에 더함
+  const ids = new Set(D.materials.map(m => m.id));
+  S.newMats = S.newMats.filter(n => !(n.id && ids.has(n.id) && n.synced));
+  for (const n of S.newMats) if (!ids.has(n.id)) D.materials.push(newMatRow(n));
+  for (const e of S.rmEdits) { const m = D.materials.find(x => x.id === e.id); if (m) m.r = e.r }
+  buildIndex();
+  KW = (D.keywords || []).map(([std, syn]) => [String(syn).toLowerCase(), String(std).toLowerCase()]);
+  Object.assign(S.upc, D.upc || {});
+  return true;
+}
+function newMatRow(n) { return { id: n.id, n: n.n, s: n.s, f: n.f, m: n.m, a: [], u: n.u, pu: n.pu, pq: n.pq, r: n.r, app: 1, local: !n.synced } }
+function buildIndex() {
+  MAT = {}; CODE = new Map(); CODES = [];
+  for (const m of D.materials) {
+    MAT[m.id] = m;
+    for (const c of [m.m].concat(m.a || [])) {
+      const k = norm(c); if (k.length < 4) continue;
+      if (!CODE.has(k)) CODE.set(k, m.id);
+      CODES.push({ k, id: m.id });
+    }
+  }
+  CODES.sort((a, b) => b.k.length - a.k.length);
+}
+
+/* ===== 화면 전환 ===== */
+const SCREENS = ["scrIntro", "scrName", "scrScan", "scrBusy", "scrPick", "scrSearch", "scrQty", "scrReg", "scrSum", "scrDone"];
+let cur = "";
+function show(id) {
+  cur = id;
+  for (const s of SCREENS) $(s).hidden = s !== id;
+  $("sumFoot").hidden = id !== "scrSum";
+  $("band").hidden = !["scrScan", "scrBusy", "scrPick", "scrSearch", "scrQty", "scrReg", "scrSum"].includes(id);
+  $("bandEnd").hidden = id === "scrSum" || !lines().length;
+  $("bandWho").textContent = S.user ? S.user + " ▾" : "";
+  if (id === "scrScan") { lastScan = null; camOn() } else camOff();
+  window.scrollTo(0, 0);
+}
+
+/* ===== 실사 줄 ===== */
+function lines() { return S.session ? S.session.lines : [] }
+function ensureSession() { if (!S.session) S.session = { id: "S" + Date.now().toString(36).toUpperCase(), mode: "실사", startedAt: new Date().toISOString(), lines: [] } }
+function lineDesc(l) {
+  const m = MAT[l.mat];
+  if (l.cond === "개봉품") return "쓰던 것 " + fmt(l.rem) + " " + (m ? m.u : "");
+  const u = m ? (canOpen(m) && l.cond === "신품" ? m.pu : m.u) : "개";
+  return (l.cond === "중고" ? "중고 " : "") + fmt(l.qty) + " " + u;
+}
+function matTitle(m) { return m ? m.n : "모르는 품목" }
+function soFar(matId, cond) {
+  let q = 0, n = 0, rs = [];
+  for (const l of lines()) if (l.mat === matId && l.cond === cond && (!editing || l.id !== editing.id)) { if (cond === "개봉품") { n++; rs.push(l.rem) } else q += l.qty }
+  return cond === "개봉품" ? { n, rs } : { q };
+}
+
+/* ===== 카메라 / 바코드 ===== */
+const GUIDE_W = 0.92, GUIDE_H = 0.7; // 카메라 화면 안 네모 크기 (비율)
+let qr = null, camState = "off", lastCode = "", lastCodeAt = 0;
+const FMT = typeof Html5QrcodeSupportedFormats !== "undefined" ? Html5QrcodeSupportedFormats : null;
+function camOn() {
+  renderScan();
+  if (typeof Html5Qrcode === "undefined") { camMsg("바코드 기능을 못 불러왔어요. [찰칵]이나 [목록에서 찾기]를 쓰세요"); return }
+  if (camState === "on" || camState === "starting") return;
+  if (camState === "paused") { try { qr.resume(); camState = "on"; return } catch (e) { camState = "off" } }
+  if (!qr) qr = new Html5Qrcode("reader", { verbose: false, experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+    formatsToSupport: FMT ? [FMT.CODE_128, FMT.CODE_39, FMT.CODE_93, FMT.UPC_A, FMT.UPC_E, FMT.EAN_13, FMT.EAN_8, FMT.QR_CODE, FMT.DATA_MATRIX, FMT.ITF] : undefined });
+  camState = "starting"; camMsg("카메라를 켜는 중…");
+  qr.start({ facingMode: "environment" }, { fps: 10, qrbox: (w, h) => ({ width: Math.max(60, Math.floor(w * GUIDE_W)), height: Math.max(60, Math.floor(h * GUIDE_H)) }),
+      videoConstraints: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } }, onCode, () => {})
+    .then(() => { camState = "on"; camMsg(""); wake(true); if (cur !== "scrScan") camOff() })
+    .catch(() => { camState = "off"; camMsg("카메라를 켤 수 없어요.\n[찰칵]을 누르면 사진으로 찍을 수 있어요") });
+}
+function camOff() { if (qr && camState === "on") { try { qr.pause(true); camState = "paused" } catch (e) {} } wake(false) }
+function camMsg(t) { $("camMsg").hidden = !t; $("camMsg").textContent = t; $("camMsg").style.whiteSpace = "pre-line" }
+let flashT = 0;
+function flash(t) { const f = $("camFlash"); f.textContent = t; f.hidden = false; clearTimeout(flashT); flashT = setTimeout(() => f.hidden = true, 3500) }
+let wl = null;
+async function wake(on) { try { if (on && !wl && navigator.wakeLock) wl = await navigator.wakeLock.request("screen"); else if (!on && wl) { await wl.release(); wl = null } } catch (e) { wl = null } }
+
+/* 바코드 글자 해석 (2026-10-22 라벨 사진 87장으로 만든 규칙)
+   - Panduit 상자 2차원 코드: [)>06 … 1P품번 … Q수량 … 8P상품번호 (수량은 상자 수량이라 쓰지 않음)
+   - CommScope QR: PartNumber:품번 / MaterialDescription:설명
+   - 1P… = 품번, 3P… = 상품번호(UPC), Q… = 수량, S… = 일련번호
+   - Siemon 등: 품번 글자 그대로 (Code128). QC번호(Code93)·주소(QR)는 버림
+   - 숫자만 = 상품 바코드(UPC/EAN/상자 ITF-14). 자재목록에 없으니 한 번 찾은 뒤 연결해 둠 */
+const fmtKey = f => String(f || "").replace(/[^A-Za-z0-9]/g, "").toUpperCase();   // "Code128" "CODE_128" -> CODE128
+const GSEP = /[\x1d\x1e\x04␝␞␄]|\sGS\s|\sRS\s|\sEOT\s/;
+function gs1Check(d13) { let s = 0; for (let i = 0; i < 13; i++) s += (+d13[i]) * (i % 2 ? 1 : 3); return String((10 - s % 10) % 10) }
+function gtin14(d) { return String(d).replace(/\D/g, "").padStart(14, "0").slice(-14) }
+// 상자 바코드(앞자리 1~8)면 안에 든 낱개 상품번호로 바꿈 (어떤 자재인지 알아보는 데만 씀)
+function itemGtin(g) { if (!/^[1-8]/.test(g)) return g; const b = "0" + g.slice(1, 13); return b + gs1Check(b) }
+function parseCode(fmt, text) {
+  const t = String(text || "").trim(), u = t.toUpperCase(), F = fmtKey(fmt);
+  if (u.startsWith("[)>")) {
+    const r = { kind: "mh10" };
+    for (const f0 of t.split(GSEP)) { const f = f0.trim(); if (/^1P./.test(f)) r.model = f.slice(2).trim(); else if (/^8P\d{8,14}$/.test(f)) { r.gtin = gtin14(f.slice(2)); if (/^[1-8]/.test(r.gtin)) r.box = true } else if (/^Q\d+$/.test(f) && +f.slice(1) > 1) r.box = true }
+    return r;
+  }
+  if (/PARTNUMBER:|COMMSCOPE\.COM\/WEBTRAK/.test(u)) {
+    const m = t.match(/PartNumber:\s*(\S+)/i), d = t.match(/MaterialDescription:\s*([^\n\r]+)/i), mid = t.match(/mid=([A-Za-z0-9\-]+)/i);
+    return { kind: "csqr", model: m ? m[1] : (mid ? mid[1] : ""), desc: d ? d[1].trim() : "" };
+  }
+  if (/^HTTPS?:/.test(u) || F === "CODE93") return { kind: "skip" };
+  if (/^\d{8,14}$/.test(u)) { const g = gtin14(u); return { kind: "gtin", gtin: g, box: F === "ITF" && /^[1-8]/.test(g) } }
+  let m = u.match(/^\(?3P\)?\s*(\d{8,14})$/); if (m) return { kind: "gtin", gtin: gtin14(m[1]) };
+  m = u.match(/^\(?1P\)?\s*([A-Z0-9][A-Z0-9\-\/\.=+ ]{2,40})$/); if (m) return { kind: "1p", model: m[1].trim() };
+  if (/^\(?\d?Q\)?\s*\d{1,5}(\s*(EA|PC|PCS))?$/.test(u)) return { kind: "skip" };
+  if (/^S[0-9A-Z]{8,}$/.test(u)) return { kind: "skip" };
+  if (/^(CODE128|CODE39)$/.test(F) && /^[A-Z0-9][A-Z0-9\-\.]{3,29}$/.test(u) && /[A-Z]/.test(u) && /\d/.test(u) && u.includes("-")) return { kind: "plain", model: u };
+  if (F === "CODE128" && /^[17]\d{8}$/.test(u)) return { kind: "plain", model: u };   // CommScope 9자리 자재번호
+  return { kind: "other", raw: u };
+}
+function upcFind(g) { if (!g) return null; return S.upc[g] || S.upc[itemGtin(g)] || S.upc[g.replace(/^0+/, "")] || S.upc[itemGtin(g).replace(/^0+/, "")] || null }
+function modelFind(md) { if (!md) return null; const k = norm(String(md).toUpperCase().replace(/^\(?1P\)?/, "")); return k.length >= 3 && CODE.has(k) ? CODE.get(k) : null }
+// 사진(또는 화면)에서 읽은 바코드들 -> 어떤 자재인지
+function idFromCodes(codes) {
+  const ids = new Set(), models = [], gtins = [], out = { ids, models, gtins, allG: [], desc: "", box: false };
+  for (const c of codes) {
+    const p = parseCode(c.f, c.t); if (p.box) out.box = true;
+    if (p.desc && !out.desc) out.desc = p.desc;
+    if (p.model) { const id = modelFind(p.model); if (id) ids.add(id); else if (p.kind !== "plain" || !models.length) models.push(p.model.toUpperCase()) }
+    if (p.gtin) { out.allG.push(p.gtin); const id = upcFind(p.gtin); if (id) ids.add(id); else gtins.push(p.gtin) }
+  }
+  // 1P·2차원 코드 품번을 앞에, 'plain'은 뒤에
+  return out;
+}
+// 같은 사진에서 자재가 하나로 정해지면, 그 사진의 모르는 상품 바코드를 그 자재에 연결 (다음부터 바코드만 비춰도 찾음)
+// 단, 모르는 상품 바코드가 한 가지일 때만 (옆 상자 바코드가 같이 찍히면 엉뚱하게 연결되므로)
+function linkGtins(matId, gtins) {
+  if (!matId || !gtins || !gtins.length) return false;
+  const fam = [...new Set(gtins.filter(g => !upcFind(g)).map(itemGtin))];
+  if (fam.length !== 1) return false;
+  S.upc[fam[0]] = matId; persist(); return true;
+}
+function codeToMat(raw, fmt) { const r = idFromCodes([{ f: fmt || "", t: raw }]); return { id: [...r.ids][0] || null, model: r.models[0] || "", gtin: r.gtins[0] || "", desc: r.desc } }
+function onCode(text, res) {
+  if (cur !== "scrScan") return;
+  const now = Date.now();
+  if (text === lastCode && now - lastCodeAt < 2500) return;
+  lastCode = text; lastCodeAt = now;
+  const fmt = res && res.result && res.result.format ? res.result.format.formatName : "";
+  const p = parseCode(fmt, text), r = codeToMat(text, fmt);
+  if (r.id) { buzz(); openQty(r.id, "바코드로 찾음"); return }
+  if (r.gtin) { flash("이 바코드는 아직 몰라요. [찰칵]을 눌러 주세요"); return }
+  // 품번이 확실한 바코드(1P·2차원 코드·CommScope QR)인데 목록에 없으면 바로 새 자재 등록
+  if (r.model && p.kind !== "plain") { buzz(); lastPhoto = null; lastOcr = []; lastOcrAll = []; lastCanvas = null; lastScan = { models: [r.model], gtins: [], desc: r.desc, box: !!p.box }; openReg({ mode: "label", model: r.model, from: "바코드" }); return }
+  if (p.kind === "skip") return;
+  flash("목록에 없는 코드예요. [찰칵]을 눌러 주세요");
+}
+function buzz() { try { navigator.vibrate && navigator.vibrate(60) } catch (e) {} }
+
+/* ===== 찰칵: 사진 -> 바코드 / 글자 인식 ===== */
+let lastPhoto = null;
+async function snap() {
+  const v = document.querySelector("#reader video");
+  if (v && v.videoWidth && camState === "on") { await readPhoto(guideCrop(v)) }
+  else $("fileSnap").click();
+}
+$("fileSnap").addEventListener("change", async e => {
+  const f = e.target.files && e.target.files[0]; e.target.value = ""; if (!f) return;
+  const img = new Image(); const url = URL.createObjectURL(f);
+  img.onload = async () => { const c = toCanvas(img, img.naturalWidth, img.naturalHeight, 2600); URL.revokeObjectURL(url); await readPhoto(c, f) };   // 사진은 크게 (바코드가 잘 읽힘)
+  img.onerror = () => toast("사진을 열지 못했어요", true);
+  img.src = url;
+});
+function toCanvas(src, w, h, maxSide = 1800) {
+  const s = Math.min(1, maxSide / Math.max(w, h)); const c = document.createElement("canvas");
+  c.width = Math.round(w * s); c.height = Math.round(h * s); c.getContext("2d").drawImage(src, 0, 0, c.width, c.height); return c;
+}
+// 카메라 화면의 네모(바코드 읽는 칸) 부분만 잘라냄. 화면은 영상을 꽉 채워(cover) 보여 주므로 그 비율로 계산
+function guideCrop(v) {
+  const box = $("reader").getBoundingClientRect(), vw = v.videoWidth, vh = v.videoHeight;
+  const sc = Math.max(box.width / vw, box.height / vh), ox = (box.width - vw * sc) / 2, oy = (box.height - vh * sc) / 2;
+  const gw = box.width * GUIDE_W, gh = box.height * GUIDE_H, gx = (box.width - gw) / 2, gy = (box.height - gh) / 2;
+  const sx = Math.max(0, (gx - ox) / sc), sy = Math.max(0, (gy - oy) / sc), sw = Math.min(vw - sx, gw / sc), sh = Math.min(vh - sy, gh / sc);
+  const c = document.createElement("canvas"); c.width = Math.round(sw); c.height = Math.round(sh);
+  c.getContext("2d").drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height); return c;
+}
+function rotate(c, deg) {
+  const r = document.createElement("canvas"); const q = deg % 180 !== 0;
+  r.width = q ? c.height : c.width; r.height = q ? c.width : c.height;
+  const x = r.getContext("2d"); x.translate(r.width / 2, r.height / 2); x.rotate(deg * Math.PI / 180); x.drawImage(c, -c.width / 2, -c.height / 2); return r;
+}
+function thumb(c) { const t = toCanvas(c, c.width, c.height, 640); return t.toDataURL("image/jpeg", 0.6) }
+let ocrWorker = null;
+function loadScript(src) { return new Promise((ok, no) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = no; document.head.appendChild(s) }) }
+// 창구가 있으면 구글 글자 인식(드라이브 OCR), 실패하면 null
+async function serverOcr(c) {
+  if (!CONFIG.SCRIPT_URL || serverOcr.off) return null;
+  try {
+    const img = toCanvas(c, c.width, c.height, 2000).toDataURL("image/jpeg", 0.85);
+    const j = await apiPost({ action: "ocr", img }, 25000);
+    return String(j.text || "").split(/\n+/).map(x => x.trim()).filter(Boolean);
+  } catch (e) { if (/ocr_off|Drive/.test(String(e))) serverOcr.off = true; return null }
+}
+const TESS = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/";
+async function tessWorker(langs) {
+  if (typeof Tesseract === "undefined") await loadScript(TESS + "tesseract.min.js");
+  const o = { workerPath: TESS + "worker.min.js", corePath: "https://cdn.jsdelivr.net/npm/tesseract.js-core@5.1.1" };
+  if (langs === "eng") o.langPath = "https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int";   // 한글 같이 쓸 때는 언어마다 기본 주소
+  return Tesseract.createWorker(langs, 1, o);
+}
+// 품번 찾기용 (영어)
+async function ocrLines(c) {
+  if (!ocrWorker) ocrWorker = await tessWorker("eng");
+  const r = await ocrWorker.recognize(c);
+  return String(r.data.text || "").split(/\n+/).map(s => s.trim()).filter(Boolean);
+}
+// 등록 화면 글자 버튼용 (한글 + 영어). 한글 자료는 처음 한 번만 받음
+let ocrWorkerKo = null, koLoading = null;
+async function ocrLinesKo(c) {
+  if (!ocrWorkerKo) { if (!koLoading) koLoading = tessWorker(["kor", "eng"]); ocrWorkerKo = await koLoading }
+  const r = await ocrWorkerKo.recognize(c);
+  return String(r.data.text || "").split(/\n+/).map(s => s.replace(/\s+/g, " ").trim()).filter(Boolean);
+}
+// 사진 한 장에서 바코드를 전부 읽음 (zxing). 못 불러오면 예전 방식(하나만)
+const ZXING = "https://cdn.jsdelivr.net/npm/zxing-wasm@2.2.4/dist/iife/reader/index.js";
+const ZX_FORMATS = ["Code128", "Code39", "Code93", "EAN-13", "EAN-8", "UPC-A", "UPC-E", "ITF", "QRCode", "DataMatrix"];
+async function readAllCodes(c) {
+  try {
+    if (typeof ZXingWASM === "undefined") await loadScript(ZXING);
+    const out = new Map();
+    const one = async cv => {
+      const r = await ZXingWASM.readBarcodes(cv.getContext("2d").getImageData(0, 0, cv.width, cv.height),
+        { formats: ZX_FORMATS, tryHarder: true, tryRotate: true, tryInvert: false, tryDownscale: true, maxNumberOfSymbols: 20 });
+      for (const x of r) if (x.isValid && x.text) out.set(x.format + "|" + x.text, { f: x.format, t: x.text });
+    };
+    await one(c);
+    if (Math.max(c.width, c.height) > 1400) await one(toCanvas(c, c.width, c.height, Math.round(Math.max(c.width, c.height) * 0.55)));
+    return [...out.values()];
+  } catch (e) {
+    const t = await barcodeFromCanvas(c); return t ? [{ f: "", t }] : [];
+  }
+}
+async function barcodeFromCanvas(c) {
+  if (typeof Html5Qrcode === "undefined") return null;
+  try {
+    const blob = await new Promise(ok => c.toBlob(ok, "image/jpeg", 0.92));
+    const f = new File([blob], "snap.jpg", { type: "image/jpeg" });
+    const fq = new Html5Qrcode("fileScan", { verbose: false });
+    const t = await fq.scanFile(f, false); try { fq.clear() } catch (e) {} return t;
+  } catch (e) { return null }
+}
+// 여러 방향으로 읽은 글자 중 제대로 읽힌 방향 하나를 고름 (거꾸로 읽은 줄은 엉뚱한 품번 후보를 만들기 때문)
+const LABEL_WORDS = new Set("MADE CHINA USA MEXICO COUNTRY ORIGIN INSPECTED LISTED COMMUNICATION CIRCUIT ACCESSORY ACCESSORIES QTY QUANTITY PRODUCT DESCRIPTION PATENT PATENTS PANDUIT SIEMON COMMSCOPE SYSTIMAX COMPANY WWW SCAN INSTRUCTIONS SAFETY WARNINGS PC PCS OUTLET".split(" "));
+function passScore(ls) { let n = 0; for (const l of ls) for (const w of l.toUpperCase().split(/[^A-Z0-9]+/)) if (DESC_WORDS.has(w) || LABEL_WORDS.has(w)) n++; return n }
+function bestLines(passes) {
+  const g = new Map(); for (const p of passes) g.set(p.r, (g.get(p.r) || []).concat(p.ls));
+  let best = [], bs = -1; for (const ls of g.values()) { const v = passScore(ls); if (v > bs) { bs = v; best = ls } }
+  return best;
+}
+// 사진에서 알아낸 것: lastScan = { models(목록에 없는 품번 바코드), gtins(모르는 상품 바코드), desc(CommScope QR 설명), box(상자 바코드) }
+let lastOcr = [], lastOcrAll = [], lastScan = null, lastCanvas = null, lastOcrServer = false;
+// 바코드 + 글자 -> 자재 (사진 시험에도 씀)
+function identify(codes, ls) {
+  const r = idFromCodes(codes);
+  if (r.ids.size) return { ids: [...r.ids], via: "바코드로 찾음", scan: r };
+  const m = matchText(ls || []);
+  return { ids: m.exact, near: m.near, via: m.exact.length ? "품번 글자로 찾음" : "", scan: r };
+}
+async function readPhoto(c) {
+  lastPhoto = thumb(c); lastOcr = []; lastOcrAll = []; lastScan = null; lastCanvas = c; lastOcrServer = false;
+  show("scrBusy"); $("busySay").textContent = "바코드를 찾는 중…"; $("busySub").textContent = "";
+  const codes = await readAllCodes(c);
+  let res = identify(codes, []);
+  lastScan = res.scan;
+  if (res.ids.length === 1) { buzz(); linkGtins(res.ids[0], lastScan.gtins); openQty(res.ids[0], res.via); return }
+  if (res.ids.length > 1) { lastScan.gtins = []; showPick({ exact: res.ids, near: [] }); return }   // 두 가지 자재가 같이 찍힘: 바코드 연결 안 함
+  let all = [], passes = [];
+  $("busySub").textContent = ocrWorker ? "" : "처음 한 번은 준비하느라 조금 더 걸려요";
+  try {
+    $("busySay").textContent = "라벨 글자를 읽는 중…";
+    const sv = await serverOcr(c);
+    if (sv && sv.length) { all = sv; lastOcr = all; lastOcrServer = true; res = identify(codes, all) }
+    const g = prep(c);
+    const tries = res.ids.length ? [] : [[0, () => c], [0, () => g], [90, () => rotate(g, 90)], [270, () => rotate(g, 270)], [180, () => rotate(g, 180)]];
+    for (let i = 0; i < tries.length; i++) {
+      $("busySay").textContent = i < 2 ? "라벨 글자를 읽는 중…" : "글자 방향을 돌려서 다시 읽는 중…";
+      $("busySub").textContent = (i + 1) + " / " + tries.length;
+      const ls = await ocrLines(tries[i][1]()); all = all.concat(ls); passes.push({ r: tries[i][0], ls });
+      if (!lastOcrServer) { lastOcr = bestLines(passes); lastOcrAll = all }
+      res = identify(codes, all); if (res.ids.length) break;
+    }
+  } catch (e) { toast("글자 인식을 불러오지 못했어요. 인터넷을 확인하세요", true); show("scrScan"); return }
+  if (res.ids.length === 1) { buzz(); linkGtins(res.ids[0], lastScan.gtins); openQty(res.ids[0], res.via); return }
+  if (res.ids.length > 1) lastScan.gtins = [];
+  // 품번 바코드(1P·2차원 코드·QR)가 있는데 목록에 없으면 고르기 화면 없이 바로 등록
+  if (!res.ids.length && !(res.near || []).length && lastScan.models.length && codes.some(x => ["1p", "mh10", "csqr"].includes(parseCode(x.f, x.t).kind))) { buzz(); openReg({ mode: "label", from: "사진" }); return }
+  showPick({ exact: res.ids, near: res.near || [] });
+}
+// 읽은 글자 줄들 -> 맞는 자재 (exact: 품번과 같은 낱말이 있음, near: 한 글자 다름)
+// 낱말 단위로만 비교 (잡음 글자 속에 짧은 품번이 우연히 섞여 맞는 것 방지). 띄어 쓴 품번을 위해 이웃 낱말 2~3개를 붙여서도 비교
+function textTokens(ls) {
+  const out = new Set();
+  for (const l of ls) {
+    const t = l.split(/[\s:;,|()\[\]{}"'`]+/).filter(Boolean);
+    for (let i = 0; i < t.length; i++) for (let n = 1; n <= 3 && i + n <= t.length; n++) {
+      const s = norm(t.slice(i, i + n).join(""));
+      if (s.length >= 4 && !(n > 1 && /^\d+$/.test(s))) out.add(s);   // 숫자 조각을 붙여 만든 번호는 우연히 맞기 쉬워서 뺌
+    }
+  }
+  return [...out];
+}
+function matchText(ls) {
+  const toks = textTokens(ls), hit = [];
+  for (const s of toks) {
+    if (CODE.has(s)) hit.push({ k: s, id: CODE.get(s) });
+    else for (const { k, id } of CODES) { if (k.length < 7) break; if (s.length <= k.length + 3 && s.includes(k)) hit.push({ k, id }) }
+  }
+  const keep = hit.filter(h => !hit.some(o => o.id !== h.id && o.k.length > h.k.length && o.k.includes(h.k)));
+  const exact = [...new Set(keep.map(h => h.id))];
+  if (exact.length) return { exact, near: [] };
+  const near = new Set();
+  for (const t of toks) if (t.length >= 6) for (const { k, id } of CODES) if (k.length >= 6 && Math.abs(k.length - t.length) <= 1 && lev1(k, t)) near.add(id);
+  return { exact: [], near: [...near].slice(0, 6) };
+}
+// 글자 인식용: 작은 사진은 키우고 흑백으로
+function prep(c) {
+  const s = Math.max(1, 2400 / Math.max(c.width, c.height)), o = document.createElement("canvas");
+  o.width = Math.round(c.width * s); o.height = Math.round(c.height * s);
+  const x = o.getContext("2d"); x.imageSmoothingQuality = "high"; x.drawImage(c, 0, 0, o.width, o.height);
+  const im = x.getImageData(0, 0, o.width, o.height), d = im.data;
+  for (let i = 0; i < d.length; i += 4) { const g = (d[i] * 0.299 + d[i + 1] * 0.587 + d[i + 2] * 0.114) | 0; d[i] = d[i + 1] = d[i + 2] = g }
+  x.putImageData(im, 0, 0); return o;
+}
+function lev1(a, b) { // 한 글자 차이 이하인지
+  if (a === b) return true; let i = 0, j = 0, d = 0;
+  while (i < a.length && j < b.length) { if (a[i] === b[j]) { i++; j++; continue } if (++d > 1) return false;
+    if (a.length > b.length) i++; else if (a.length < b.length) j++; else { i++; j++ } }
+  return d + (a.length - i) + (b.length - j) <= 1;
+}
+
+/* ===== 후보 / 검색 ===== */
+function candHtml(ids) {
+  return ids.map(id => { const m = MAT[id]; return `<button class="cand" data-act="pickMat" data-id="${esc(id)}"><b>${esc(m.n)}</b><span>${esc(m.s)}</span><span>${esc(m.f)} · <span class="code">${esc(m.m)}</span></span></button>` }).join("");
+}
+function showPick(res, all) {
+  const ids = res.exact.length ? res.exact : res.near;
+  $("pickSay").textContent = ids.length ? "어느 거예요?" : "품번을 못 찾았어요";
+  $("pickSub").textContent = ids.length ? (res.exact.length ? "사진에 품번이 여러 개 보여요. 지금 세는 것을 고르세요" : "한 글자가 다른 품번이에요. 맞는지 확인하세요") : "다시 찍거나, 목록에서 찾거나, 모르는 품목으로 남기세요";
+  $("pickPhoto").src = lastPhoto || ""; $("pickPhoto").hidden = !lastPhoto;
+  $("pickList").innerHTML = candHtml(ids);
+  show("scrPick");
+}
+const HANGUL = /[ㄱ-힝]/;
+function searchMat(q) {
+  const words = q.toLowerCase().split(/[\s\-]+/).filter(Boolean); if (!words.length) return [];
+  const sets = words.map(w => {
+    const t = [w];
+    if (HANGUL.test(w)) {
+      let hit = KW.filter(([syn]) => syn.startsWith(w));
+      if (!hit.length && w.length >= 2) hit = KW.filter(([syn]) => syn.includes(w));
+      for (const [, std] of hit) t.push(std);
+    }
+    return [...new Set(t)];
+  });
+  const out = [];
+  for (const m of D.materials) {
+    const hay = (m.n + " " + m.s + " " + m.f + " " + m.m + " " + (m.a || []).join(" ")).toLowerCase();
+    if (sets.every(ts => ts.some(t => hay.includes(t)))) out.push(m);
+  }
+  const q1 = norm(q);
+  out.sort((a, b) => (norm(b.m).startsWith(q1) ? 1 : 0) - (norm(a.m).startsWith(q1) ? 1 : 0));
+  return out;
+}
+let findT = 0;
+$("findBox").addEventListener("input", () => { clearTimeout(findT); findT = setTimeout(runFind, 180) });
+function runFind() {
+  const q = $("findBox").value.trim();
+  if (!q) { $("findList").innerHTML = ""; $("findCount").textContent = "한글로도 찾아요. 띄어 쓰면 모두 들어간 것만 나와요"; return }
+  const r = searchMat(q);
+  $("findCount").textContent = r.length ? r.length + "개 찾음" + (r.length > 40 ? " (앞 40개만 보여요. 더 적어 보세요)" : "") : "없어요. 다른 말로 적어 보세요";
+  $("findList").innerHTML = candHtml(r.slice(0, 40).map(m => m.id));
+}
+
+/* ===== 수량 화면 ===== */
+let qtyCtx = null, editing = null, replacing = null;
+// 사진을 찍은 뒤 사람이 고른 자재면, 그 사진의 모르는 상품 바코드도 연결 (scrScan으로 돌아가면 lastScan은 지워짐)
+function openQty(matId, how) {
+  const learned = lastScan && linkGtins(matId, lastScan.gtins); if (lastScan) lastScan.gtins = [];
+  if (learned) how += " · 이 바코드도 기억했어요";
+  if (replacing) { const l = replacing; replacing = null; editing = l; startQty(matId, how, l.cond, l.cond === "개봉품" ? l.rem : l.qty); return }
+  editing = null; startQty(matId, how, "신품", 0);
+}
+function startQty(matId, how, cond, val) {
+  const m = MAT[matId] || null;
+  if (m && !canOpen(m) && cond === "개봉품") cond = "신품";
+  if (m && canOpen(m) && cond === "중고") cond = "신품";
+  qtyCtx = { mat: matId, how, cond, val: val ? String(val) : "", warned: false, fresh: !!val }; // fresh: 고칠 때 첫 숫자는 덮어씀
+  $("qtyItem").innerHTML = m ? `<div class="how">${esc(how || "")}</div><div class="nm">${esc(m.n)}${m.local ? '<span class="tag">새로 등록</span>' : ""}</div><div class="sp2">${esc(m.s)}</div><div class="md"><span>${esc(m.f)}</span><span class="code">${esc(m.m)}</span></div><div class="rmline"><span>비고 ${esc(m.r || "없음")}</span><button class="link" data-act="rmOpen" data-id="${esc(m.id)}">비고 고치기</button></div><div class="sofar" id="soFar"></div>`
+    : `<div class="nm">모르는 품목</div><div class="sp2">사진을 남겨 두면 사무실에서 등록해요</div><div class="sofar" id="soFar"></div>`;
+  $("qtyPhoto").hidden = !!m || !(qtyCtx.photo = editing ? getPhoto(editing.id) : lastPhoto); if (!m) $("qtyPhoto").src = qtyCtx.photo || "";
+  const segs = !m ? [] : canOpen(m) ? [["신품", "새 것 (" + m.pu + ")"], ["개봉품", "쓰던 것"]] : [["신품", "새 것"], ["중고", "중고"]];
+  $("condSeg").innerHTML = segs.map(([c, t]) => `<button data-act="cond" data-c="${c}" aria-pressed="${c === cond}">${esc(t)}</button>`).join("");
+  $("condSeg").hidden = !segs.length;
+  $("qtyNoBtn").textContent = editing ? "그만두기" : "아니에요";
+  $("qtyOkBtn").textContent = editing ? "바꾸기" : "넣기";
+  renderQty(); show("scrQty");
+}
+function renderQty() {
+  const c = qtyCtx, m = MAT[c.mat];
+  const lot = c.cond === "개봉품";
+  $("qtySay").textContent = lot ? "얼마나 남았어요?" : "몇 개예요?";
+  $("qtyLabel").textContent = lot ? "쓰던 것 하나의 남은 양" : "지금 눈에 보이는 개수만";
+  $("qtyUnit").textContent = !m ? "개" : lot ? m.u : (canOpen(m) && c.cond === "신품" ? m.pu : m.u);
+  $("qtyVal").textContent = c.val ? Number(c.val).toLocaleString("ko-KR") : "0"; $("qtyVal").classList.toggle("ph", !c.val);
+  $("qtyWarn").hidden = true; $("pad").hidden = false;
+  for (const b of $("condSeg").querySelectorAll("button")) b.setAttribute("aria-pressed", b.dataset.c === c.cond);
+  const sf = $("soFar");
+  if (sf && m) { const r = soFar(c.mat, c.cond);
+    sf.textContent = lot ? (r.n ? "쓰던 것 지금까지 " + r.n + "개 (" + r.rs.map(fmt).join(", ") + " " + m.u + ")" : "") : (r.q ? "지금까지 " + fmt(r.q) + " " + $("qtyUnit").textContent + " 넣었어요" : "") }
+}
+$("pad").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b || !qtyCtx) return;
+  const k = b.dataset.k; let v = qtyCtx.val;
+  if (k === "clr") v = ""; else if (k === "bs") v = v.slice(0, -1); else { if (qtyCtx.fresh) v = ""; if (v.length < 6) v = (v + b.textContent).replace(/^0+(?=\d)/, "") }
+  qtyCtx.fresh = false;
+  qtyCtx.val = v === "0" ? "" : v; qtyCtx.warned = false; renderQty();
+});
+function qtyOk() {
+  const c = qtyCtx, n = Number(c.val || 0), m = MAT[c.mat];
+  if (!n) { toast("숫자를 먼저 누르세요", true); return }
+  if (!c.warned) {
+    let w = "";
+    if (c.cond === "개봉품" && m && n > m.pq) w = fmt(n) + " " + m.u + " 남았어요? 새 것 하나가 " + fmt(m.pq) + " " + m.u + "예요";
+    else if (c.cond !== "개봉품" && n >= CONFIG.BIG_QTY) w = fmt(n) + "개 맞아요?";
+    if (w) { c.warned = true; $("qtyWarnMsg").textContent = w; $("qtyWarn").hidden = false; $("pad").hidden = true; return }
+  }
+  ensureSession();
+  const rec = editing || { id: "L" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) };
+  Object.assign(rec, { mat: c.mat, cond: m ? c.cond : "신품", qty: c.cond === "개봉품" ? 1 : n, rem: c.cond === "개봉품" ? n : 0, how: rec.how || c.how || "", t: rec.t || new Date().toISOString(), by: S.user });
+  if (!m && c.photo) setPhoto(rec.id, c.photo);
+  const isNew = !editing;
+  if (isNew) S.session.lines.push(rec); else rec.editedAt = new Date().toISOString();
+  persist();
+  const back = isNew ? "scrScan" : backAfterEdit;
+  editing = null; lastPhoto = null;
+  toast((isNew ? "" : "바꿨어요 · ") + matTitle(m) + " " + lineDesc(rec) + (isNew ? " 넣었어요" : ""), false, isNew ? { kind: "add", id: rec.id } : null);
+  show(back); if (back === "scrSum") renderSum();
+}
+function getPhoto(id) { return load("scs_photo_" + id, null) }
+function setPhoto(id, p) { if (!save("scs_photo_" + id, p)) toast("사진이 너무 많아 폰에 저장 못 했어요", true) }
+
+/* ===== 찍기 화면 아래: 방금 넣은 것 ===== */
+function lineRow(l) {
+  const m = MAT[l.mat];
+  return `<button class="ln" data-act="line" data-id="${esc(l.id)}"><span class="t"><b>${esc(matTitle(m))}${m ? ' <span class="code" style="display:inline;font-size:14px;color:var(--muted)">' + esc(m.m) + "</span>" : ""}</b><span>${esc(m ? m.s : "사진만 남김")}</span></span><span class="q num">${esc(lineDesc(l))}</span></button>`;
+}
+function renderScan() {
+  const ls = lines();
+  $("replaceNote").hidden = !replacing;
+  const r = ls.slice(-5).reverse();
+  $("recentBox").innerHTML = `<h3><span>방금 넣은 것 · 누르면 고쳐요</span><span>${ls.length ? "모두 " + ls.length + "줄" : ""}</span></h3>` +
+    (r.length ? r.map(lineRow).join("") : `<div class="empty">아직 없어요. 라벨을 비춰 보세요</div>`) +
+    (ls.length > 5 ? `<button class="ln" data-act="finish" style="justify-content:center;color:var(--accent)">전체 보기</button>` : "");
+  const un = S.session && S.session.resumed && ls.length;
+  $("unsentNote").hidden = !un;
+  if (un) $("unsentNote").innerHTML = `<b>아직 안 보낸 실사 ${ls.length}줄</b>이 있어요. 이어서 찍고, 다 끝나면 [끝] → [보내기]`;
+  $("bandEnd").hidden = !ls.length;
+}
+
+/* ===== 줄 고치기 ===== */
+let sheetLine = null, backAfterEdit = "scrScan";
+function openSheet(id) {
+  const l = lines().find(x => x.id === id); if (!l) return; sheetLine = l; backAfterEdit = cur === "scrSum" ? "scrSum" : "scrScan";
+  const m = MAT[l.mat];
+  $("sheetItem").innerHTML = `<div class="nm">${esc(matTitle(m))}</div><div class="sp2">${esc(m ? m.s : "")}</div><div class="md">${m ? '<span class="code">' + esc(m.m) + "</span>" : ""}<b class="num">${esc(lineDesc(l))}</b></div>`;
+  $("sheetBg").hidden = false; camOff();
+}
+function closeSheet() { $("sheetBg").hidden = true; sheetLine = null; if (cur === "scrScan") camOn() }
+
+/* ===== 정리 화면 ===== */
+const openGrp = new Set();
+function renderSum() {
+  const ls = lines(), g = new Map();
+  for (const l of ls) { const k = l.mat || "?" + l.id; if (!g.has(k)) g.set(k, []); g.get(k).push(l) }
+  $("sumSub").textContent = ls.length ? "품목 " + g.size + "개 · " + ls.length + "줄. 누르면 줄마다 고칠 수 있어요" : "아직 센 것이 없어요";
+  let h = "";
+  for (const [k, arr] of g) {
+    const m = MAT[arr[0].mat];
+    const by = c => arr.filter(l => l.cond === c);
+    const parts = [];
+    const nq = by("신품").reduce((s, l) => s + l.qty, 0), uq = by("중고").reduce((s, l) => s + l.qty, 0), lots = by("개봉품");
+    if (nq) parts.push((m && canOpen(m) ? "새 것 " : "") + fmt(nq) + " " + (m ? (canOpen(m) ? m.pu : m.u) : "개"));
+    if (uq) parts.push("중고 " + fmt(uq) + " " + (m ? m.u : ""));
+    if (lots.length) parts.push("쓰던 것 " + lots.length + "개");
+    const detail = [];
+    if (by("신품").length > 1) detail.push(by("신품").map(l => fmt(l.qty)).join(" + "));
+    if (lots.length) detail.push(lots.map(l => fmt(l.rem)).join(", ") + " " + m.u);
+    const op = openGrp.has(k);
+    h += `<div class="grp"><button data-act="grp" data-k="${esc(k)}" aria-expanded="${op}"><span class="t"><b>${esc(matTitle(m))}</b><span>${m ? esc(m.s) + " · " + '<span class="code">' + esc(m.m) + "</span>" : "사진만 남김"}</span></span><span class="tot num">${esc(parts.join(" · "))}<small>${esc(detail.join(" · "))}</small></span></button>` +
+      (op ? `<div class="chips">${arr.map(l => `<button class="chip num" data-act="line" data-id="${esc(l.id)}">${esc(lineDesc(l))}<small>${esc(new Date(l.t).toTimeString().slice(0, 5))}</small></button>`).join("")}</div>` : "") + `</div>`;
+  }
+  $("sumList").innerHTML = h || `<div class="empty" style="border:0">찍기로 돌아가서 라벨을 비춰 보세요</div>`;
+  $("sendBtn").textContent = ls.length ? "보내기 (" + ls.length + "줄)" : "보내기";
+  $("verLine").textContent = CONFIG.APP_VERSION + " · 자재목록 " + (D.version || "") + (CONFIG.SCRIPT_URL ? "" : " · 시험판: 보내기 = 엑셀 내려받기");
+}
+
+/* ===== 보내기 ===== */
+// 엑셀 장부와 같은 규칙: 신품·중고 수량은 기준단위(m·EA …)로, 쓰던 것(개봉품)은 한 개마다 남은 양
+function baseQty(l) { const m = MAT[l.mat]; return l.cond === "신품" && canOpen(m) ? l.qty * m.pq : l.qty }
+function exportRows() {
+  const out = [];
+  for (const l of lines()) { const m = MAT[l.mat] || {};
+    out.push({ 구분: S.session.mode, 실사번호: S.session.id, 작업자: l.by || S.user, 시각: l.t, MaterialID: l.mat || "", 모델명: m.m || "", 품명: m.n || "모르는 품목", 규격: m.s || "", 제조사: m.f || "",
+      상태: l.cond, 센수량: l.qty, 센단위: m.id ? (l.cond === "개봉품" ? (m.pu || "개") : (canOpen(m) && l.cond === "신품" ? m.pu : m.u)) : "", 기준수량: l.cond === "개봉품" ? "" : baseQty(l), 기준단위: m.u || "",
+      남은양: l.cond === "개봉품" ? l.rem : "", 줄ID: l.id, 사진: l.mat ? "" : (getPhoto(l.id) ? "있음" : "") }) }
+  return out;
+}
+async function send() {
+  const ls = lines(); if (!ls.length) { toast("보낼 것이 없어요", true); return }
+  show("scrDone"); $("band").hidden = true;
+  $("doneBox").innerHTML = `<div class="spin" aria-hidden="true"></div><p class="say">보내는 중…</p>`;
+  const regs = S.newMats.filter(n => !n.synced), rms = S.rmEdits.filter(e => !e.synced);
+  try {
+    if (CONFIG.SCRIPT_URL) {
+      const payload = { action: "submit", session: { id: S.session.id, mode: S.session.mode, startedAt: S.session.startedAt },
+        registrations: regs.map(n => Object.assign({}, n, { photo: getPhoto("reg_" + n.tmp) })), remarks: rms,
+        lines: ls.map(l => ({ id: l.id, t: l.t, by: l.by || S.user, mat: l.mat || "", model: (MAT[l.mat] || {}).m || "", cond: l.cond,
+          qty: baseQty(l), rem: l.rem || 0, photo: l.mat ? "" : getPhoto(l.id), note: l.note || "" })) };
+      const j = await apiPost(payload, 60000);
+      for (const t in (j.map || {})) remapMat(t, j.map[t]);
+      for (const e of rms) e.synced = true;
+      S.rmEdits = S.rmEdits.filter(e => !e.synced);
+    } else {
+      if (typeof XLSX === "undefined") await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
+      const rows = exportRows(), wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "실사_줄별");
+      const g = {}; for (const r of rows) { const k = (r.MaterialID || r.줄ID) + "|" + r.상태; (g[k] = g[k] || Object.assign({}, r, { 기준수량: 0, 개수: 0, 남은양: [] })); g[k].개수 += r.센수량; if (r.기준수량 !== "") g[k].기준수량 += r.기준수량; if (r.남은양 !== "") g[k].남은양.push(r.남은양) }
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(Object.values(g).map(r => ({ MaterialID: r.MaterialID, 모델명: r.모델명, 품명: r.품명, 규격: r.규격, 상태: r.상태,
+        합계: r.상태 === "개봉품" ? r.개수 + "개" : r.기준수량, 기준단위: r.기준단위, 남은양목록: r.남은양.join(", ") }))), "실사_품목별");
+      if (regs.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(regs.map(n => ({ 임시번호: n.id, 품명: n.n, 규격: n.s, 제조사: n.f, 모델명: n.m, 기준단위: n.u,
+        포장단위: n.pu, 포장수량: n.pq || "", 비고: n.r, 등록경로: n.src, 등록자: n.by, 등록시각: n.at }))), "새_자재");
+      if (rms.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rms.map(e => ({ MaterialID: e.id, 새비고: e.r, 전비고: e.old, 고친사람: e.by, 시각: e.at }))), "비고_수정");
+      XLSX.writeFile(wb, "SCS_실사_" + S.session.id + ".xlsx");
+      for (const n of regs) n.synced = true;   // 시험판: 내려받은 것은 다음 파일에 다시 넣지 않음
+      S.rmEdits = [];
+    }
+  } catch (e) {
+    $("doneBox").innerHTML = `<p class="say">못 보냈어요</p><p class="tiny">센 것은 폰에 그대로 있어요. 인터넷을 확인하고 다시 누르세요</p><button class="big primary" data-act="send">다시 보내기</button><button class="big plain" data-act="toSum">정리 화면으로</button>`;
+    return;
+  }
+  const g = new Set(ls.map(l => l.mat || l.id)).size;
+  save("scs_last_sent", S.session);
+  for (const l of ls) if (!l.mat) del("scs_photo_" + l.id);
+  for (const n of regs) if (n.synced) del("scs_photo_reg_" + n.tmp);
+  S.session = null; persist();
+  $("doneBox").innerHTML = `<p class="say" style="color:var(--ok)">보냈어요</p><p class="sub" style="margin:0">품목 ${g}개 · ${ls.length}줄${regs.length ? " · 새 자재 " + regs.length + "개" : ""}${CONFIG.SCRIPT_URL ? "" : "<br>(시험판: 엑셀 파일로 내려받았어요)"}</p><button class="big primary" data-act="restart">새로 시작</button>`;
+}
+
+/* ===== 새 자재 등록 (현장) =====
+   라벨이 있으면: 읽은 글자로 칸을 미리 채움 (칸마다 고칠 수 있음)
+   라벨이 없으면: 사진 + 품명·규격·비고 직접 입력
+   등록하면 폰 목록에 바로 들어가 다음부터 찾아짐. 창구가 있으면 바로 올려 번호(A00001…)를 받음 */
+const MFRS = [["PANDUIT", "Panduit"], ["COMMSCOPE", "CommScope"], ["SYSTIMAX", "CommScope"], ["NETCONNECT", "CommScope"], ["SIEMON", "Siemon"],
+  ["BELDEN", "Belden"], ["LS CABLE", "LS"], ["LS SIMPLE", "LS"], ["LSCNS", "LS"], ["CISCO", "Cisco"], ["LEVITON", "Leviton"],
+  ["CORNING", "Corning"], ["TE CONNECTIVITY", "TE"], ["NEXANS", "Nexans"], ["LEGRAND", "Legrand"], ["HUBBELL", "Hubbell"],
+  ["REICHLE", "R&M"], ["R&M", "R&M"], ["EATON", "Eaton"], ["EZ-NET", "ez-net"]];
+// 라벨 낱말 -> 품명 추천 (위에서부터 먼저 맞는 것)
+const NAME_RULES = [
+  [/LOAD BAR|SUBASSEMBLY|MODULAR PLUG|\bPLUG\b/, "Modular Plug"], [/PIGTAIL/, "Fiber Pigtail"],
+  [/JUMPER|F\/O|FIBER.*CORD|\b(LC|SC|ST|MPO)(\/[AU]?PC)?\s*-\s*(LC|SC|ST|MPO)\b|\bOM[1-5]\b.*CORD|\bOS[12]\b.*CORD/, "Fiber Patch Cord"],
+  [/PATCH ?CORD|\bCORD\b/, "Patch Cord"], [/BLANK/, "Blank Module"], [/JACK|KEYSTONE|\bMODULE\b/, "Jack Module"],
+  [/FACE ?PLATE/, "Faceplate"], [/SURFACE MOUNT|MOUNT BOX/, "Surface Mount Box"], [/ADAPTER (PANEL|PLATE)/, "Fiber Adapter Panel"],
+  [/ADAPTER|COUPLER/, "Fiber Adapter"], [/CASSETTE/, "Fiber Cassette"], [/PATCH ?PANEL|\bPANEL\b/, "Patch Panel"],
+  [/CABLE MANAGER|MANAGEMENT|MANAGER/, "Cable Manager"], [/ENCLOSURE|FIBER TRAY|\bFDF\b/, "Fiber Enclosure"],
+  [/TRANSCEIVER|\bSFP/, "Transceiver"], [/LABEL/, "Label"], [/CABLE TIE|\bTIE\b/, "Cable Tie"], [/TOOL/, "Tool"],
+  [/(FIBER|OPTIC).*CABLE|CABLE.*(FIBER|OPTIC)/, "Fiber Cable"], [/(CAT ?5E|CAT ?6|UTP|FTP).*CABLE|CABLE.*(CAT ?5E|CAT ?6|UTP)/, "UTP Cable"],
+  [/CABINET/, "Cabinet"], [/RACK/, "Open Rack"]];
+// 제품군 이름으로 제조사 알아보기 (로고 글자는 자주 깨짐)
+const MFR_HINTS = [[/PAN-?NET|MINI-?COM|NETKEY|PANDUIT\.COM|OPTI-?CORE|QUICKNET|TX6 ?PLUS|TX6A/, "Panduit"], [/GIGASPEED|LAZRSPEED|TERASPEED|SYSTIMAX|NETCONNECT|COMMSC|CS-PAT\.COM|COMMSCOPE\.COM/, "CommScope"],
+  [/Z-?MAX|XGLO|SIEMON\.COM/, "Siemon"], [/LS ?SIMPLE|CABLE ?& ?SYSTEM|\bLS-[A-Z]{2,4}-|SIMPLE/, "LS"]];
+// 상품 바코드 앞자리(회사 번호)로 제조사 알아보기
+const GTIN_MFR = [[/^0?0?74983|^0?0?613056|^5007498/, "Panduit"], [/^0?0?700416/, "Siemon"], [/^0?0?(884104|721460|191516|741149)/, "CommScope"], [/^0?0?731304/, "Eaton"], [/^0?7611821/, "R&M"]];
+// 설명 줄에 자주 나오는 낱말 (이 낱말이 많을수록 설명 줄로 봄)
+const DESC_WORDS = new Set("PLUS PLUG CORD CABLE PATCH PANEL MODULE MODULAR FOR JACK LOAD BAR PIECE FIBER OPTIC JUMPER FACEPLATE PORT PORTS UTP STP FTP CAT CAT6 CAT6A CAT5E CATEGORY COLOR WHITE BLACK BLUE GREY GRAY YELLOW RED GREEN ORANGE VIOLET AQUA DUPLEX SIMPLEX SINGLE MODE MULTIMODE MOUNT BOX SURFACE ADAPTER CASSETTE BLANK LABEL TIE TOOL MANAGER HORIZONTAL VERTICAL RACK ITEM ASSEMBLY SUBASSEMBLY STITCHED SHIELDED UNSHIELDED STRAIGHT ANGLED KEYSTONE TERMINATION HOUSING COLLAR TRAY ENCLOSURE PIGTAIL CONNECTOR COUPLER MODULES FLAT EMPTY LSZH PVC CMR CMP".split(" "));
+function lev(a, b) { const d = Array.from({ length: b.length + 1 }, (_, i) => i); for (let i = 1; i <= a.length; i++) { let p = d[0]; d[0] = i; for (let j = 1; j <= b.length; j++) { const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, p + (a[i - 1] === b[j - 1] ? 0 : 1)); p = t } } return d[b.length] }
+// 낱말이 제대로 된 비율이 높은 줄일수록 점수가 높음 (깨진 글자 줄은 낮음)
+function descScore(l) {
+  const t = l.split(/[\s,]+/).map(x => x.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, "")).filter(Boolean);
+  if (t.length < 2) return 0;
+  let good = 0, dict = 0;
+  for (const w of t) { const W = w.toUpperCase(); if (DESC_WORDS.has(W)) { good++; dict++ } else if (/^[A-Za-z][A-Za-z\-\/]{2,}$/.test(w) || codeLike(w) || /^\d+(\.\d+)?(M|MM|FT|PORT|P)?$/i.test(w)) good++ }
+  return (good / t.length) * (1 + dict) * Math.min(t.length, 8);
+}
+// 줄 앞뒤의 깨진 짧은 조각 떼기
+function trimJunk(l) {
+  const t = l.split(/\s+/), ok = w => { const c = w.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9)]+$/g, ""); return c.length >= 3 || DESC_WORDS.has(c.toUpperCase()) || /^\d+$/.test(c) || codeLike(c) };
+  while (t.length && !ok(t[0])) t.shift();
+  while (t.length && !ok(t[t.length - 1])) t.pop();
+  return t.map(w => w.replace(/^[^A-Za-z0-9(]+|[^A-Za-z0-9)%.]+$/g, "")).filter(Boolean).join(" ");
+}
+const JUNK = /PACKAGED|MADE IN|QC ?#|QC:|WWW\.|\.COM|ROHS|\bLOT\b|LOT ?#|PATENT|LISTED|COMPLIANT|COMMUNICATION CIRCUIT|SCAN BARCODE|INSTALL-IT|납품|수량|QUANTITY|Q'?TY|SERIAL|\bUPC\b|PROD ?ID|PART ?(NO|NAME)/i;
+const UNITS = ["EA", "m", "ft", "SET", "Roll", "봉지"], PUNITS = ["", "Box", "Bag", "Reel", "Roll", "봉지", "Drum"];
+
+const letterRatio = s => { const t = s.replace(/\s/g, ""); return t ? (t.match(/[A-Za-z]/g) || []).length / t.length : 0 };
+const codeLike = t => /^[A-Z0-9][A-Z0-9\-\/\.=]{3,39}$/i.test(t) && /\d/.test(t) && (/[A-Z]/i.test(t) || t.length >= 8) && !/^(QC|UPC|LOT)/i.test(t) && !/^\d{10,14}$/.test(t);
+function cleanLine(s) { return String(s || "").replace(/^[^A-Za-z0-9(가-힣]+/, "").replace(/[|_~]+/g, " ").replace(/\s+/g, " ").trim() }
+const BRAND_WORDS = /\b(PAN-?NET|MINI-?COM|NETKEY|P\/N|PN|PART\s*NO)\b\s*[:.]?/ig;
+const PART_STOP = /INSPECTED|US PAT|COUNTRY OF|SCAN FOR|FOR ROHS|PATENT|QC ?#|MADE IN|USE BY|USE LABEL|GO GREEN|WWW\.|LISTED|DATE CODE|^DC \d|SERIAL|BLDG|\bFMT\b|ORDER|\bSEQ\b|\bREV\b|ACCESSORY|ACCESSORIES/i;
+const DESC_STOP = /PACKAGED|INSPECTED|US PAT|COUNTRY OF|SCAN FOR|FOR ROHS|PATENT|QC ?#|MADE IN|USE BY|USE LABEL|GO GREEN|WWW\.|\(3P\)|\(Q\)|QUANTITY|QTY|LISTED|DATE CODE|^DC \d|SERIAL/i;
+
+// 라벨 글자 줄 -> 등록 칸 초안. scan = 같은 사진의 바코드 (lastScan)
+// 규격은 라벨 문장 그대로 (사람이 필요한 부분만 남김)
+function parseLabel(ls, knownModel, scan, allLs) {
+  scan = scan || {};
+  const L = ls.map(cleanLine).filter(Boolean), all = (allLs && allLs.length ? allLs.map(cleanLine) : L).join("\n").toUpperCase(),
+    out = { cands: [], model: "", mfr: "", desc: "", name: "", u: "EA", pu: "", pq: "", remark: "" };
+  for (const [k, v] of MFRS) if (all.includes(k)) { out.mfr = v; break }
+  if (!out.mfr) for (const [re, v] of MFR_HINTS) if (re.test(all)) { out.mfr = v; break }
+  if (!out.mfr) for (const g of scan.allG || []) for (const [re, v] of GTIN_MFR) if (!out.mfr && re.test(g)) out.mfr = v;
+  if (!out.mfr) for (const w of all.split(/[^A-Z0-9]+/)) for (const [k, v] of MFRS) if (k.length >= 6 && !k.includes(" ") && Math.abs(w.length - k.length) <= 1 && lev(w, k) <= 2) { out.mfr = out.mfr || v }
+  // 품번 후보 (점수): 바코드 품번 > 'P/N:'·'PROD ID' 뒤 > 'XXX: 설명' 줄 앞 > 줄 전체가 품번 > 품번처럼 생긴 낱말
+  const sc = new Map(), at = new Map();
+  const add = (t, v, i) => { t = String(t || "").toUpperCase().replace(/[.,;:]+$/, ""); if (t.length < 3) return; if ((sc.get(t) || 0) < v) sc.set(t, v); if (i != null && !at.has(t)) at.set(t, i) };
+  if (knownModel) add(knownModel, 100);
+  for (const m of scan.models || []) add(m, 90);
+  const keyRe = /(PART\s*(NO|NAME|NUMBER|#)|PROD(UCT)?\s*(ID|NO)|P\s*[\/I1L|]\s*N|CAT(ALOG)?\s*(NO|#)|MODEL|\(1P\))\s*[:.#]?\s*([A-Z0-9][A-Z0-9\-\/\.=]{3,})/i;
+  // 품번이 아닌 줄(검사자·특허·인증·날짜)과 표준 이름(EN50575·6P8C·T568A/B·26AWG …)은 뺌
+  const notPart = t => /^(EN\d|IEC\d|ISO\d|UL\d|T568|RJ\d|CAT\d|\d+AWG|[68]P[48]C|OM\d|OS\d|US\d|LF-?\d|E\d{5,}|\d{1,4}[\/.-]\d{1,2}[\/.-]\d{1,4}$|\d{5}-[A-Z0-9]{1,3}-\d{2}$|\d{5}-\+?-\d{2}$|[S6]7S\d$|U[S8]\d{2}$|105N5\d$|3411\d-\d+$|34106-\d+$)/i.test(t);
+  const seenN = new Map(); for (const l of L) for (const t of l.split(/[\s:;,]+/)) if (codeLike(t)) seenN.set(t.toUpperCase(), (seenN.get(t.toUpperCase()) || 0) + 1);
+  L.forEach((l, i) => {
+    if (/UPC|\(3P\)/i.test(l)) return;
+    const m = l.match(keyRe), mk = m && m[m.length - 1]; if (mk && (codeLike(mk) || /^[A-Z][A-Z0-9]*(-[A-Z0-9]+)+$/i.test(mk)) && !notPart(mk)) add(mk, 60, i);
+    const c = l.match(/^([A-Z0-9][A-Z0-9\-\/\.]{3,39})\s*:\s+\S/i); if (c && codeLike(c[1]) && /[A-Z]/i.test(c[1]) && !notPart(c[1])) add(c[1], 50, i);
+    if (PART_STOP.test(l) && !m) return;
+    const bare = l.replace(BRAND_WORDS, "").trim();
+    if (codeLike(bare) && /[A-Z]/i.test(bare) && !notPart(bare)) add(bare, 40 + Math.min(4, seenN.get(bare.toUpperCase()) || 0), i);
+    for (const t of l.split(/[\s:;,]+/)) if (codeLike(t) && !notPart(t)) add(t, (/[A-Z]/i.test(t) && /\d/.test(t) ? 20 : 10) + Math.min(6, 2 * ((seenN.get(t.toUpperCase()) || 1) - 1)) + (t.includes("-") ? 2 : 0), i);
+  });
+  // 바코드로 안 품번도 글자 줄 위치를 찾아 둠 (그 아래 줄이 설명)
+  for (const k of sc.keys()) if (!at.has(k)) { const i = L.findIndex(l => norm(l).includes(norm(k))); if (i >= 0) at.set(k, i) }
+  // CommScope: 9자리 자재번호(760…·108…·700…)를 모델명으로 (기존 목록과 같은 방식), 글자 품번은 비고에 '모델명:'
+  let alt = "";
+  if (out.mfr === "CommScope") {
+    const num = [...sc.keys()].find(k => /^[17]\d{8}$/.test(k));
+    if (num) {
+      const named = [...sc.entries()].filter(([k]) => k !== num && /[A-Z]/.test(k)).sort((x, y) => y[1] - x[1])[0];
+      sc.set(num, Math.max(sc.get(num), 95)); if (named && named[1] >= 20) alt = named[0];
+    }
+  }
+  out.cands = [...sc.entries()].sort((x, y) => y[1] - x[1]).map(x => x[0]).slice(0, 6);
+  out.model = out.cands[0] || "";
+  if (!alt && out.cands[1]) { const d = L.findIndex(l => /PRODUCT DESCRIPTION/i.test(l)); if (d >= 0 && L[d + 1] && norm(L[d + 1]).startsWith(norm(out.cands[1])) && /[A-Z]/.test(out.cands[1])) alt = out.cands[1] }
+  if (alt && norm(alt) !== norm(out.model)) out.remark = "모델명: " + alt;
+  // 규격(라벨 문장): QR 설명 > 'PRODUCT DESCRIPTION' 아래 줄 > 품번 줄 아래 줄들 > 'ITEM:' > 가장 그럴듯한 줄
+  const okDesc = l => l && l.length >= 4 && !DESC_STOP.test(l) && !JUNK.test(l) && letterRatio(l) >= 0.4 && !codeLike(l.replace(BRAND_WORDS, "").trim());
+  const takeFrom = i => { const d = []; for (let j = i; j < L.length && d.length < 4; j++) { if (!okDesc(L[j])) break; d.push(L[j]) } return d.join(" ") };
+  const dIdx = L.findIndex(l => /PRODUCT DESCRIPTION|PART DESC|DESCRIPTION\s*:?$/i.test(l));
+  if (scan.desc) out.desc = scan.desc;
+  else if (dIdx >= 0 && L[dIdx + 1]) { const d = []; for (let j = dIdx + 1; j < L.length && d.length < 2; j++) { if (DESC_STOP.test(L[j])) break; d.push(L[j]) } out.desc = d.join(" ") }
+  if (!out.desc && out.model) {   // 품번이 적힌 줄(여러 번 나오면 차례로) 바로 뒤의 설명 줄들
+    const nm = norm(out.model);
+    for (let i = 0; i < L.length && !out.desc; i++) {
+      if (!norm(L[i]).includes(nm)) continue;
+      const l = L[i], k = l.toUpperCase().indexOf(out.model), rest = k >= 0 ? l.slice(k + out.model.length).replace(/^[\s:,]+/, "") : "";
+      out.desc = [okDesc(rest) && rest.length >= 6 ? rest : "", takeFrom(i + 1)].filter(Boolean).join(" ");
+    }
+  }
+  if (!out.desc) {
+    const item = L.findIndex(l => /\bITEM\s*[:.]/i.test(l));
+    if (item >= 0) out.desc = L[item].replace(/^.*?\bITEM\s*[:.]\s*/i, "");
+    else {
+      let best = -1, bs = 0;
+      L.forEach((l, i) => { if (!okDesc(l)) return; const v = descScore(l); if (v > bs) { bs = v; best = i } });
+      if (best >= 0) out.desc = takeFrom(best) || L[best];
+    }
+  }
+  out.desc = trimJunk(out.desc);
+  const D2 = out.desc.toUpperCase();
+  for (const [re, nm] of NAME_RULES) if (re.test(D2)) { out.name = nm; break }
+  // 포장 수량: 낱개 포장 라벨의 '100 PC'·'Quantity:100pcs'만. 상자 바코드가 보이거나 '(Q) QUANTITY'·'QTY:' 상자 라벨이면 넣지 않음
+  if (!scan.box) {
+    const flat = L.filter(l => !/\(Q\)|QUANTITY\s+\d|QTY\s*:/i.test(l)).join(" ");
+    const pk = flat.match(/\b([1-9]\d{1,4})\s*(PC|PCS|PC'S|EA|PIECES|PK)(?![,A-Z0-9])/i);
+    if (pk) { out.pu = "Bag"; out.pq = pk[1] }
+  }
+  const bulk = all.match(/\b(305|500|1000|1500)\s*(M|FT|METERS?|FEET)\b/);
+  if (bulk && /CABLE/.test(D2) && !/CORD/.test(D2)) { out.u = /F/.test(bulk[2]) ? "ft" : "m"; out.pu = "Box"; out.pq = bulk[1] }
+  return out;
+}
+
+let regState = null;
+function topValues(key, n) {
+  const c = new Map(); for (const m of D.materials) { const v = m[key]; if (v) c.set(v, (c.get(v) || 0) + 1) }
+  return [...c.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(x => x[0]);
+}
+function chipRow(el, act, vals, cur, labelOf) {
+  $(el).innerHTML = vals.map(v => `<button type="button" data-act="${act}" data-v="${esc(v)}" aria-pressed="${v === cur}">${esc(labelOf ? labelOf(v) : v)}</button>`).join("");
+}
+const EMPTY_P = { cands: [], model: "", mfr: "", desc: "", name: "", u: "EA", pu: "", pq: "", remark: "" };
+function openReg(o) {
+  const lab = o.mode === "label";
+  const p = lab ? parseLabel(lastOcr, o.model || "", lastScan, lastOcrAll) : EMPTY_P;
+  regState = { mode: o.mode, photo: lastPhoto, u: p.u, pu: p.pu, dupOk: false, tgt: lab ? "rgSpec" : "rgName", lines: [], used: new Set() };
+  $("regSay").textContent = lab ? "새 자재 등록" : "라벨 없는 물건 등록";
+  $("regSub").textContent = lab ? (lastOcr.length || o.model ? "틀린 칸은 고치고, 아래 글자 버튼으로 채워도 돼요" : "라벨 사진을 찍으면 칸이 채워져요") : "물건 사진을 찍으면 찍힌 글자가 버튼으로 나와요";
+  $("rgModel").value = p.model; $("rgMfr").value = p.mfr; $("rgName").value = p.name; $("rgSpec").value = p.desc; $("rgPq").value = p.pq; $("rgRemark").value = p.remark || "";
+  chipRow("rgModelCands", "rgCand", p.cands.filter(c => c !== p.model), "", v => v); $("rgModelCands").querySelectorAll("button").forEach(b => b.classList.add("code"));
+  $("rgNameList").innerHTML = topValues("n", 400).map(v => `<option value="${esc(v)}">`).join("");
+  regChips(); regPhotoShow(); $("regDup").hidden = true; $("rgErr").hidden = true;
+  regLinesShow(lastOcrServer ? lastOcr : null);
+  show("scrReg");
+  if (lastCanvas && !lastOcrServer) regReadLines(lastCanvas);
+}
+function regChips() {
+  const mf = topValues("f", 6); if ($("rgMfr").value && !mf.includes($("rgMfr").value)) mf.unshift($("rgMfr").value);
+  chipRow("rgMfrChips", "rgMfr", mf, $("rgMfr").value);
+  const nm = topValues("n", 8); const cur = $("rgName").value; if (cur && !nm.includes(cur)) nm.unshift(cur);
+  chipRow("rgNameChips", "rgName", nm, cur);
+  chipRow("rgUnitChips", "rgUnit", UNITS, regState.u);
+  chipRow("rgPuChips", "rgPu", PUNITS, regState.pu, v => v || "없음");
+}
+function regPhotoShow() {
+  $("regPhoto").hidden = !regState.photo; if (regState.photo) $("regPhoto").src = regState.photo;
+  $("regPhotoBtn").textContent = regState.photo ? "사진 다시 찍기" : (regState.mode === "label" ? "라벨 사진 찍기" : "물건 사진 찍기 (꼭 필요해요)");
+}
+/* 사진에서 읽은 글자 줄 버튼: 누르면 고른 칸(모델명·품명·규격·비고)에 이어 붙음. 칸을 눌러도 그 칸이 골라짐 */
+const TGTS = [["rgModel", "모델명", "fdModel"], ["rgName", "품명", "fdName"], ["rgSpec", "규격", "fdSpec"], ["rgRemark", "비고", "fdRemark"]];
+// 깨진 글자 줄은 뺌: 제대로 된 낱말(한글 2자 이상, 영어 낱말, 숫자·단위, 품번 모양) 비율이 높은 줄만
+const goodTok = w => /^[가-힣()]{2,}$/.test(w) || /^[A-Za-z][a-z]{2,}$/.test(w) && /[aeiou]/.test(w) || /^[A-Z]{4,}$/.test(w) && /[AEIOU]/.test(w) && !/(.)\1\1/.test(w) || DESC_WORDS.has(w.toUpperCase()) || LABEL_WORDS.has(w.toUpperCase()) ||
+  /^[\d.,]+(MM|M|CM|FT|KG|G|V|A|W|PCS?|EA|M\/M|MM²|SQ)?$/i.test(w) || codeLike(w) || /^[가-힣()\d.,:\-/]{2,}$/.test(w) && /[가-힣]/.test(w) && w.length >= 3 || /[@.](COM|KR|NET)$/i.test(w) || /^(P\/N|PN|NO|DC|KC|QTY|PCS?|EA)[:.]?$/i.test(w);
+function lineOk(l) {
+  const t = l.split(/[\s,;]+/).map(w => w.replace(/^[^A-Za-z0-9가-힣(]+|[^A-Za-z0-9가-힣)%.]+$/g, "")).filter(Boolean);
+  if (!t.length) return false;
+  const g = t.filter(goodTok);
+  if (t.some(w => codeLike(w) && /[A-Z]/i.test(w) && w.length >= 5)) return g.length / t.length >= 0.4;   // 품번이 든 줄
+  return g.length / t.length >= 0.7 && (g.filter(w => w.length >= 3).length >= 2 || g.some(w => /[가-힣]{2,}/.test(w)));
+}
+function ocrChipLines(ls) {
+  const seen = new Set(), out = [];
+  for (const raw of ls || []) {
+    const l = String(raw).replace(/[|_~“”‘’`]+/g, " ").replace(/\s+/g, " ").trim();
+    if ((l.match(/[A-Za-z0-9가-힣]/g) || []).length < 2 || !lineOk(l)) continue;
+    const k = l.toUpperCase(); if (seen.has(k)) continue; seen.add(k); out.push(l);
+    if (out.length >= 40) break;
+  }
+  return out;
+}
+function regLinesShow(ls, busy) {
+  if (ls) regState.lines = ocrChipLines(ls);
+  const has = regState.lines.length;
+  $("rgOcr").hidden = !has && !busy;
+  regState.busy = !!busy;
+  $("rgOcrHd").innerHTML = busy && !has ? "사진 글자를 읽는 중…" : `사진에서 읽은 글자예요. 누르면 <b id="rgTgtName">${esc(TGTS.find(t => t[0] === regState.tgt)[1])}</b> 칸에 들어가요` + (busy ? " (한글을 더 읽는 중…)" : "");
+  $("rgTgt").innerHTML = TGTS.map(([id, nm]) => `<button type="button" data-act="rgTgt" data-v="${id}" aria-pressed="${id === regState.tgt}">${nm}</button>`).join("");
+  $("rgTgt").hidden = !has;
+  $("rgLines").innerHTML = regState.lines.map((l, i) => `<button type="button" data-act="rgLine" data-i="${i}" class="${regState.used.has(i) ? "used" : ""}">${esc(l)}</button>`).join("");
+  for (const [id, , fd] of TGTS) $(fd).classList.toggle("on", has > 0 && id === regState.tgt);
+}
+function regSetTgt(id) { if (!regState || regState.tgt === id) return; regState.tgt = id; regLinesShow(null, regState.busy) }
+function regAddLine(i) {
+  const l = regState.lines[i]; if (l == null) return;
+  const el = $(regState.tgt), v = el.value.trim();
+  el.value = regState.tgt === "rgModel" ? l.replace(BRAND_WORDS, "").trim().toUpperCase() : (v ? v + " " + l : l);
+  regState.used.add(i); regLinesShow(null, regState.busy);
+  if (regState.tgt === "rgName") regChips();
+}
+// 줄 버튼: 창구(구글)가 있으면 그 결과. 없으면 영어 인식 줄 + 한글 인식에서 한글이 든 줄만
+async function regReadLines(c) {
+  const st = regState; regLinesShow(null, true);
+  try {
+    let ls = await serverOcr(c);
+    if (!ls || !ls.length) {
+      const g = prep(c);
+      const en = lastOcr.length ? lastOcr : await ocrLines(g);
+      if (regState !== st) return;
+      regLinesShow(en, true);
+      const ko = (await ocrLinesKo(g)).filter(l => /[가-힣]{2,}/.test(l));
+      ls = en.concat(ko);
+    }
+    if (regState !== st) return;
+    regLinesShow(ls);
+    return ls;
+  } catch (e) { if (regState === st) regLinesShow(regState.lines.length ? null : []) }
+}
+for (const [id] of TGTS) $(id).addEventListener("focus", () => regSetTgt(id));
+$("regFile").addEventListener("change", e => {
+  const f = e.target.files && e.target.files[0]; e.target.value = ""; if (!f) return;
+  const img = new Image(), url = URL.createObjectURL(f);
+  img.onload = async () => {
+    const c = toCanvas(img, img.naturalWidth, img.naturalHeight, 2600); URL.revokeObjectURL(url);
+    regState.photo = thumb(c); regPhotoShow(); regState.used = new Set();
+    if (regState.mode !== "label") { await regReadLines(c); return }
+    $("regSub").textContent = "라벨 글자를 읽는 중…";
+    try {
+      const codes = await readAllCodes(c), sc = idFromCodes(codes);
+      lastScan = { models: sc.models, gtins: sc.gtins.concat(lastScan ? lastScan.gtins : []), allG: sc.allG, desc: sc.desc, box: sc.box };
+      let ls = (await serverOcr(c)) || [], server = ls.length > 0; const g = prep(c), passes = [];
+      for (const [r, fn] of server ? [] : [[0, () => c], [0, () => g], [90, () => rotate(g, 90)], [270, () => rotate(g, 270)], [180, () => rotate(g, 180)]]) {
+        passes.push({ r, ls: await ocrLines(fn()) });
+        if (passScore(bestLines(passes)) >= 6) break;   // 제대로 읽힌 방향을 찾으면 그만
+      }
+      const allLs = server ? ls : passes.flatMap(x => x.ls);
+      if (!server) ls = bestLines(passes);
+      lastOcr = ls; lastOcrAll = allLs;
+      const p = parseLabel(ls, $("rgModel").value.trim(), lastScan, allLs);
+      // 이미 적어 둔 칸은 그대로 두고 빈 칸만 채움
+      if (!$("rgModel").value.trim()) $("rgModel").value = p.model;
+      if (!$("rgMfr").value.trim()) $("rgMfr").value = p.mfr;
+      if (!$("rgName").value.trim()) $("rgName").value = p.name;
+      if (!$("rgSpec").value.trim()) $("rgSpec").value = p.desc;
+      if (!$("rgRemark").value.trim()) $("rgRemark").value = p.remark || "";
+      if (!$("rgPq").value.trim() && p.pq) { $("rgPq").value = p.pq; regState.pu = p.pu; regState.u = p.u }
+      chipRow("rgModelCands", "rgCand", p.cands.filter(x => x !== $("rgModel").value.trim()), "", v => v); $("rgModelCands").querySelectorAll("button").forEach(b => b.classList.add("code"));
+      regChips();
+      const hit = sc.ids.size ? { exact: [...sc.ids] } : matchText(ls);
+      if (hit.exact.length) regDupBox(hit.exact, "이미 등록된 자재 같아요. 맞으면 누르세요");
+      $("regSub").textContent = "틀린 칸은 고치고, 아래 글자 버튼으로 채워도 돼요";
+      if (server) regLinesShow(ls); else regReadLines(c);
+    } catch (err) { $("regSub").textContent = "글자를 못 읽었어요. 칸을 직접 채워 주세요" }
+  };
+  img.src = url;
+});
+function regDupBox(ids, msg, allowNew) {
+  $("regDup").innerHTML = `<b>${esc(msg)}</b><div class="cands" style="margin-top:8px">${candHtml(ids)}</div>` +
+    (allowNew ? `<button class="big plain" style="margin-top:8px" data-act="regForce">아니요, 새로 등록</button>` : "");
+  $("regDup").hidden = false; $("regDup").scrollIntoView({ block: "center" });
+}
+function regErr(t) { $("rgErr").textContent = t; $("rgErr").hidden = !t; if (t) $("rgErr").scrollIntoView({ block: "center" }) }
+function regSave() {
+  const v = { m: $("rgModel").value.trim().toUpperCase(), f: $("rgMfr").value.trim(), n: $("rgName").value.trim(), s: $("rgSpec").value.trim().replace(/\s+/g, " "),
+    u: regState.u || "EA", pu: regState.pu || "", pq: Number($("rgPq").value.replace(/,/g, "")) || 0, r: $("rgRemark").value.trim() };
+  if (!v.n) return regErr("품명을 고르거나 적어 주세요");
+  if (!v.s) return regErr("규격을 적어 주세요 (라벨 문장 그대로도 돼요)");
+  if (v.pu && !(v.pq > 0)) return regErr("포장을 골랐으면 포장 하나에 든 양을 적어 주세요");
+  if (!v.pu && v.pq > 0) return regErr("포장 하나에 든 양을 적었으면 포장(봉지·박스 등)도 골라 주세요");
+  if (regState.mode !== "label" && !regState.photo) return regErr("물건 사진을 찍어 주세요");
+  regErr("");
+  // 같은 자재가 두 번 생기지 않게
+  const k = norm(v.m);
+  if (k.length >= 4 && CODE.has(k)) return regDupBox([CODE.get(k)], "같은 품번이 이미 등록돼 있어요. 이걸로 세세요");
+  if (!regState.dupOk) {
+    let near = [];
+    if (k.length >= 6) near = [...new Set(CODES.filter(c => c.k.length >= 6 && Math.abs(c.k.length - k.length) <= 1 && lev1(c.k, k)).map(c => c.id))].slice(0, 4);
+    else near = searchMat(v.n + " " + v.s.split(" ").slice(0, 3).join(" ")).slice(0, 3).map(m => m.id);
+    if (near.length) return regDupBox(near, "혹시 이거예요? 맞으면 누르세요", true);
+  }
+  S.seq = (S.seq || 0) + 1;
+  const tmp = "N" + S.device + "-" + S.seq;
+  const n = Object.assign({ id: tmp, tmp, src: regState.mode === "label" ? "앱 라벨" : "앱 직접", by: S.user, at: new Date().toISOString(),
+    synced: false }, v);
+  if (regState.photo) setPhoto("reg_" + tmp, regState.photo);
+  S.newMats.push(n); D.materials.push(newMatRow(n)); buildIndex(); persist();
+  syncReg(n);
+  lastPhoto = null;
+  openQty(tmp, "새로 등록함");
+}
+async function syncReg(n) {
+  if (!CONFIG.SCRIPT_URL || n.synced) return;
+  try { const j = await apiPost({ action: "register", mat: Object.assign({}, n, { photo: getPhoto("reg_" + n.tmp) }) }); remapMat(n.tmp, j.id) } catch (e) {}
+}
+// 임시 번호(N…)를 창구가 준 번호(A00001 또는 이미 있던 자재 번호)로 바꿈
+function remapMat(tmp, id) {
+  const n = S.newMats.find(x => x.tmp === tmp); if (!n || !id) return;
+  const was = n.id; n.id = id; n.synced = true;
+  for (const l of lines()) if (l.mat === was) l.mat = id;
+  for (const u in S.upc) if (S.upc[u] === was) S.upc[u] = id;
+  for (const e of S.rmEdits) if (e.id === was) e.id = id;
+  const exists = D.materials.some(m => m.id === id && m.id !== was);
+  D.materials = D.materials.filter(m => !(m.id === was && exists));
+  for (const m of D.materials) if (m.id === was) { m.id = id; m.local = false }
+  if (qtyCtx && qtyCtx.mat === was) qtyCtx.mat = id;
+  buildIndex(); persist();
+  if (cur === "scrScan") renderScan(); else if (cur === "scrSum") renderSum();
+}
+
+/* ===== 비고 고치기 (기존 자재는 현장에서 비고만 고칠 수 있음) ===== */
+let rmId = "";
+function openRemark(id) {
+  const m = MAT[id]; if (!m) return; rmId = id;
+  $("rmItem").innerHTML = `<div class="nm">${esc(m.n)}</div><div class="sp2">${esc(m.s)}</div><div class="md"><span class="code">${esc(m.m)}</span></div>`;
+  $("rmText").value = m.r || ""; $("rmBg").hidden = false; setTimeout(() => $("rmText").focus(), 50);
+}
+async function rmSave() {
+  const m = MAT[rmId], r = $("rmText").value.trim().replace(/\s+/g, " ");
+  $("rmBg").hidden = true; if (!m || r === (m.r || "")) return;
+  const n = S.newMats.find(x => x.id === rmId && !x.synced);
+  if (n) n.r = r;     // 아직 안 올린 새 자재면 등록 내용에 같이 들어감
+  else S.rmEdits.push({ eid: "E" + S.device + Date.now().toString(36), id: rmId, r, old: m.r || "", by: S.user, at: new Date().toISOString() });
+  m.r = r; persist();
+  if (cur === "scrQty") { const x = $("qtyItem").querySelector(".rmline span"); if (x) x.textContent = "비고 " + (r || "없음") }
+  toast("비고를 저장했어요");
+  syncRemarks();
+}
+async function syncRemarks() {
+  if (!CONFIG.SCRIPT_URL) return;
+  for (const e of S.rmEdits.filter(x => !x.synced && !String(x.id).startsWith("N"))) {
+    try { await apiPost({ action: "remark", edit: e }); e.synced = true } catch (err) { return }
+  }
+  S.rmEdits = S.rmEdits.filter(x => !x.synced); persist();
+}
+
+/* ===== 알림 ===== */
+let toastT = 0, toastCtx = null;
+function toast(msg, err, ctx) {
+  $("toastMsg").textContent = msg; $("toast").classList.toggle("err", !!err);
+  toastCtx = ctx || null; $("toastBtn").hidden = !ctx; $("toast").hidden = false;
+  clearTimeout(toastT); toastT = setTimeout(() => { $("toast").hidden = true; toastCtx = null }, ctx ? 5000 : 3000);
+}
+
+/* ===== 버튼 처리 ===== */
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-act]"); if (!b) return;
+  const a = b.dataset.act;
+  switch (a) {
+    case "introOk": S.introSeen = true; persist(); start(); break;
+    case "rename": S.user = ""; persist(); renderNames(); show("scrName"); break;
+    case "setName": S.user = b.dataset.n; persist(); start(); break;
+    case "snap": snap(); break;
+    case "pickFile": $("fileSnap").removeAttribute("capture"); $("fileSnap").click(); break;
+    case "search": $("findBox").value = ""; runFind(); show("scrSearch"); setTimeout(() => $("findBox").focus(), 50); break;
+    case "backScan": show("scrScan"); break;
+    case "cancelReplace": replacing = null; show(backAfterEdit); if (backAfterEdit === "scrSum") renderSum(); break;
+    case "pickMat": openQty(b.dataset.id, cur === "scrSearch" ? "목록에서 고름" : "후보에서 고름"); break;
+    case "unknown": editing = null; replacing = null; startQty(null, "", "신품", 0); break;
+    case "cond": qtyCtx.cond = b.dataset.c; qtyCtx.val = ""; qtyCtx.warned = false; renderQty(); break;
+    case "qtyOk": qtyOk(); break;
+    case "qtyNo": { const back = editing ? backAfterEdit : "scrScan"; editing = null; show(back); if (back === "scrSum") renderSum(); break }
+    case "warnYes": qtyOk(); break;
+    case "warnNo": qtyCtx.val = ""; qtyCtx.warned = false; renderQty(); break;
+    case "line": openSheet(b.dataset.id); break;
+    case "sheetClose": closeSheet(); break;
+    case "lnQty": { const l = sheetLine; $("sheetBg").hidden = true; editing = l; startQty(l.mat, "", l.cond, l.cond === "개봉품" ? l.rem : l.qty); break }
+    case "lnItem": { replacing = sheetLine; $("sheetBg").hidden = true; show("scrScan"); break }
+    case "lnDel": { const l = sheetLine, i = lines().indexOf(l); if (i >= 0) { S.session.lines.splice(i, 1); persist(); toast("지웠어요 · " + matTitle(MAT[l.mat]) + " " + lineDesc(l), false, { kind: "del", line: l, at: i }) }
+      $("sheetBg").hidden = true; if (cur === "scrSum") renderSum(); else show("scrScan"); break }
+    case "undo": if (toastCtx) { if (toastCtx.kind === "add") { const i = lines().findIndex(x => x.id === toastCtx.id); if (i >= 0) S.session.lines.splice(i, 1) } else if (toastCtx.kind === "del") { ensureSession(); S.session.lines.splice(Math.min(toastCtx.at, lines().length), 0, toastCtx.line) }
+      persist(); $("toast").hidden = true; toastCtx = null; if (cur === "scrSum") renderSum(); else if (cur === "scrScan") renderScan(); } break;
+    case "finish": openGrp.clear(); renderSum(); show("scrSum"); break;
+    case "grp": { const k = b.dataset.k; openGrp.has(k) ? openGrp.delete(k) : openGrp.add(k); renderSum(); break }
+    case "send": send(); break;
+    case "toSum": renderSum(); show("scrSum"); break;
+    case "restart": start(); break;
+    case "noLabel": lastPhoto = null; lastOcr = []; lastOcrAll = []; lastScan = null; lastCanvas = null; openReg({ mode: "nolabel" }); break;
+    case "regFromPhoto": openReg({ mode: "label", from: "사진" }); break;
+    case "regTakePhoto": $("regFile").click(); break;
+    case "regCancel": show("scrScan"); break;
+    case "regSave": regSave(); break;
+    case "regForce": regState.dupOk = true; $("regDup").hidden = true; regSave(); break;
+    case "rgCand": $("rgModel").value = b.dataset.v; break;
+    case "rgTgt": regSetTgt(b.dataset.v); break;
+    case "rgLine": regAddLine(+b.dataset.i); break;
+    case "rgMfr": $("rgMfr").value = b.dataset.v; regChips(); break;
+    case "rgName": $("rgName").value = b.dataset.v; regChips(); break;
+    case "rgUnit": regState.u = b.dataset.v; regChips(); break;
+    case "rgPu": regState.pu = b.dataset.v; if (!regState.pu) $("rgPq").value = ""; regChips(); break;
+    case "rmOpen": openRemark(b.dataset.id); break;
+    case "rmSave": rmSave(); break;
+    case "rmClose": $("rmBg").hidden = true; break;
+  }
+});
+$("sheetBg").addEventListener("click", e => { if (e.target === $("sheetBg")) closeSheet() });
+$("rmBg").addEventListener("click", e => { if (e.target === $("rmBg")) $("rmBg").hidden = true });
+["rgMfr", "rgName"].forEach(id => $(id).addEventListener("input", () => regChips()));
+
+function renderNames() { $("nameList").innerHTML = (D.people || []).map(n => `<button data-act="setName" data-n="${esc(n)}">${esc(n)}</button>`).join("") }
+function start() {
+  if (!S.introSeen) { show("scrIntro"); return }
+  if (!S.user) { renderNames(); show("scrName"); return }
+  show("scrScan");
+}
+(async () => {
+  try { $("fileLink").hidden = !matchMedia("(pointer: fine)").matches } catch (e) {}
+  if (!(await loadData())) return;
+  if (S.session && S.session.lines.length) S.session.resumed = true;
+  persist(); start();
+  for (const n of S.newMats.filter(x => !x.synced)) syncReg(n);
+  syncRemarks();
+})();
+document.addEventListener("visibilitychange", () => { if (document.hidden) camOff(); else if (cur === "scrScan") camOn() });
+</script>
+</body>
+</html>
