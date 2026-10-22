@@ -998,7 +998,7 @@ function trimJunk(l) {
   const t = l.split(/\s+/), ok = w => { const c = w.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9)]+$/g, ""); return c.length >= 3 || DESC_WORDS.has(c.toUpperCase()) || /^\d+$/.test(c) || codeLike(c) };
   while (t.length && !ok(t[0])) t.shift();
   while (t.length && !ok(t[t.length - 1])) t.pop();
-  return t.map(w => w.replace(/^[^A-Za-z0-9(]+|[^A-Za-z0-9)%.]+$/g, "")).filter(Boolean).join(" ");
+  return t.map(w => w.replace(/^[|_~`'"“”‘’]+|[|_~`'"“”‘’]+$/g, "")).filter(Boolean).join(" ");   // 쉼표·마침표는 라벨 그대로 둠
 }
 const JUNK = /PACKAGED|MADE IN|QC ?#|QC:|WWW\.|\.COM|ROHS|\bLOT\b|LOT ?#|PATENT|LISTED|COMPLIANT|COMMUNICATION CIRCUIT|SCAN BARCODE|INSTALL-IT|납품|수량|QUANTITY|Q'?TY|SERIAL|\bUPC\b|PROD ?ID|PART ?(NO|NAME)/i;
 const UNITS = ["EA", "m", "ft", "SET", "Roll", "봉지"], PUNITS = ["", "Box", "Bag", "Reel", "Roll", "봉지", "Drum"];
@@ -1056,8 +1056,8 @@ function parseLabel(ls, knownModel, scan, allLs) {
   // 규격(라벨 문장): QR 설명 > 'PRODUCT DESCRIPTION' 아래 줄 > 품번 줄 아래 줄들 > 'ITEM:' > 가장 그럴듯한 줄
   const okDesc = l => l && l.length >= 4 && !DESC_STOP.test(l) && !JUNK.test(l) && letterRatio(l) >= 0.4 && !codeLike(l.replace(BRAND_WORDS, "").trim());
   // 줄 끝의 깨진 조각(4 ns a i 같은 것)을 떼고, 바코드 밑 글자((1P)…)·QC 줄에서 멈춤
-  const tidy = l => { const t = l.split(/\s+/); const bad = w => { w = w.replace(/[^A-Za-z0-9가-힣)%.\-\/]+$/g, ""); return !goodTok(w) || (w.length <= 2 && !DESC_WORDS.has(w.toUpperCase())) }; while (t.length > 1 && bad(t[t.length - 1])) t.pop(); return t.join(" ") };
-  const takeFrom = i => { const d = []; for (let j = i; j < L.length && d.length < 4; j++) { if (!okDesc(L[j]) || /\(1P\)|QC|^\d+$/.test(L[j]) || !lineOk(tidy(L[j]))) break; d.push(tidy(L[j])) } return d.join(" ") };
+  const tidy = l => { const t = l.split(/\s+/); const bad = w => { w = w.replace(/[^A-Za-z0-9가-힣)%]+$/g, "").replace(/^[^A-Za-z0-9가-힣(]+/, ""); return !goodTok(w) || (w.length <= 2 && !DESC_WORDS.has(w.toUpperCase()) && !/^\d+$/.test(w)) }; while (t.length > 1 && bad(t[t.length - 1])) t.pop(); return t.join(" ") };
+  const takeFrom = i => { const d = []; for (let j = i; j < L.length && d.length < 6; j++) { if (!okDesc(L[j]) || /\(1P\)|QC|^\d+$/.test(L[j]) || !lineOk(tidy(L[j]))) break; d.push(tidy(L[j])) } return d.join(" ") };
   const dIdx = L.findIndex(l => /PRODUCT DESCRIPTION|PART DESC|DESCRIPTION\s*:?$/i.test(l));
   if (scan.desc) out.desc = scan.desc;
   else if (dIdx >= 0 && L[dIdx + 1]) { const d = []; for (let j = dIdx + 1; j < L.length && d.length < 2; j++) { if (DESC_STOP.test(L[j])) break; d.push(L[j]) } out.desc = d.join(" ") }
@@ -1112,7 +1112,7 @@ function openReg(o) {
   $("rgNameList").innerHTML = topValues("n", 400).map(v => `<option value="${esc(v)}">`).join("");
   regChips(); regPhotoShow(); $("regDup").hidden = true; $("rgErr").hidden = true;
   regLinesShow(lastOcrServer ? lastOcr : null);
-  show("scrReg");
+  show("scrReg"); fitSpec();
   if (lastCanvas && !lastOcrServer) regReadLines(lastCanvas);
 }
 function regChips() {
@@ -1133,7 +1133,7 @@ const TGTS = [["rgModel", "모델명", "fdModel"], ["rgName", "품명", "fdName"
 const goodTok = w => /^[가-힣()]{2,}$/.test(w) || /^[A-Za-z][a-z]{2,}$/.test(w) && /[aeiou]/.test(w) || /^[A-Z]{4,}$/.test(w) && /[AEIOU]/.test(w) && !/(.)\1\1/.test(w) || DESC_WORDS.has(w.toUpperCase()) || LABEL_WORDS.has(w.toUpperCase()) ||
   /^[\d.,]+(MM|M|CM|FT|KG|G|V|A|W|PCS?|EA|M\/M|MM²|SQ)?$/i.test(w) || codeLike(w) || /^[가-힣()\d.,:\-/]{2,}$/.test(w) && /[가-힣]/.test(w) && w.length >= 3 || /[@.](COM|KR|NET)$/i.test(w) || /^(P\/N|PN|NO|DC|KC|QTY|PCS?|EA)[:.]?$/i.test(w);
 function lineOk(l) {
-  const t = l.split(/[\s,;]+/).map(w => w.replace(/^[^A-Za-z0-9가-힣(]+|[^A-Za-z0-9가-힣)%.]+$/g, "")).filter(Boolean);
+  const t = l.split(/[\s,;]+/).map(w => w.replace(/^[^A-Za-z0-9가-힣(]+|[^A-Za-z0-9가-힣)%]+$/g, "")).filter(Boolean);
   if (!t.length) return false;
   const g = t.filter(goodTok);
   if (t.some(w => codeLike(w) && /[A-Z]/i.test(w) && w.length >= 5)) return g.length / t.length >= 0.4;   // 품번이 든 줄
@@ -1165,7 +1165,7 @@ function regAddLine(i) {
   const l = regState.lines[i]; if (l == null) return;
   const el = $(regState.tgt), v = el.value.trim();
   el.value = regState.tgt === "rgModel" ? l.replace(BRAND_WORDS, "").trim().toUpperCase() : (v ? v + " " + l : l);
-  regState.used.add(i); regLinesShow(null, regState.busy);
+  regState.used.add(i); regLinesShow(null, regState.busy); fitSpec();
   if (regState.tgt === "rgName") regChips();
 }
 // 줄 버튼: 창구(구글)가 있으면 그 결과. 없으면 영어 인식 줄 + 한글 인식에서 한글이 든 줄만
@@ -1187,6 +1187,9 @@ async function regReadLines(c) {
   } catch (e) { if (regState === st) regLinesShow(regState.lines.length ? null : []) }
 }
 for (const [id] of TGTS) $(id).addEventListener("focus", () => regSetTgt(id));
+// 규격 칸은 글이 다 보이게 높이를 늘림
+function fitSpec() { const t = $("rgSpec"); t.style.height = "auto"; t.style.height = Math.max(72, t.scrollHeight + 4) + "px" }
+$("rgSpec").addEventListener("input", fitSpec);
 $("regFile").addEventListener("change", e => {
   const f = e.target.files && e.target.files[0]; e.target.value = ""; if (!f) return;
   const img = new Image(), url = URL.createObjectURL(f);
@@ -1218,7 +1221,7 @@ $("regFile").addEventListener("change", e => {
       regChips();
       const hit = sc.ids.size ? { exact: [...sc.ids] } : matchText(ls);
       if (hit.exact.length) regDupBox(hit.exact, "이미 등록된 자재 같아요. 맞으면 누르세요");
-      $("regSub").textContent = "틀린 칸은 고치고, 아래 글자 버튼으로 채워도 돼요";
+      $("regSub").textContent = "틀린 칸은 고치고, 아래 글자 버튼으로 채워도 돼요"; fitSpec();
       if (server) regLinesShow(ls); else regReadLines(c);
     } catch (err) { $("regSub").textContent = "글자를 못 읽었어요. 칸을 직접 채워 주세요" }
   };
