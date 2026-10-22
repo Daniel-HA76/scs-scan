@@ -547,7 +547,12 @@ function onCode(text, res) {
   if (r.id) { buzz(); openQty(r.id, "바코드로 찾음"); return }
   if (r.gtin) { flash("이 바코드는 아직 몰라요. [찰칵]을 눌러 주세요"); return }
   // 품번이 확실한 바코드(1P·2차원 코드·CommScope QR)인데 목록에 없으면 바로 새 자재 등록
-  if (r.model && p.kind !== "plain") { buzz(); lastPhoto = null; lastOcr = []; lastOcrAll = []; lastCanvas = null; lastScan = { models: [r.model], gtins: [], desc: r.desc, box: !!p.box }; openReg({ mode: "label", model: r.model, from: "바코드" }); return }
+  if (r.model && p.kind !== "plain") {
+    buzz();
+    // 지금 카메라 화면을 사진으로 잡아 라벨 글자도 읽은 뒤 등록 화면으로 (칸·글자 버튼이 채워짐)
+    const v = document.querySelector("#reader video");
+    if (v && v.videoWidth && camState === "on") { readPhoto(guideCrop(v), null, r.model); return }
+    lastPhoto = null; lastOcr = []; lastOcrAll = []; lastCanvas = null; lastScan = { models: [r.model], gtins: [], desc: r.desc, box: !!p.box }; openReg({ mode: "label", model: r.model, from: "바코드" }); return }
   if (p.kind === "skip") return;
   flash("목록에 없는 코드예요. [찰칵]을 눌러 주세요");
 }
@@ -662,12 +667,13 @@ function identify(codes, ls) {
   const m = matchText(ls || []);
   return { ids: m.exact, near: m.near, via: m.exact.length ? "품번 글자로 찾음" : "", scan: r };
 }
-async function readPhoto(c) {
+async function readPhoto(c, f, hintModel) {
   lastPhoto = thumb(c); lastOcr = []; lastOcrAll = []; lastScan = null; lastCanvas = c; lastOcrServer = false;
   show("scrBusy"); $("busySay").textContent = "바코드를 찾는 중…"; $("busySub").textContent = "";
   const codes = await readAllCodes(c);
   let res = identify(codes, []);
   lastScan = res.scan;
+  if (hintModel && !lastScan.models.includes(hintModel)) lastScan.models.unshift(hintModel);   // 화면에서 먼저 읽은 품번 바코드
   if (res.ids.length === 1) { buzz(); linkGtins(res.ids[0], lastScan.gtins); openQty(res.ids[0], res.via); return }
   if (res.ids.length > 1) { lastScan.gtins = []; showPick({ exact: res.ids, near: [] }); return }   // 두 가지 자재가 같이 찍힘: 바코드 연결 안 함
   let all = [], passes = [];
@@ -689,7 +695,7 @@ async function readPhoto(c) {
   if (res.ids.length === 1) { buzz(); linkGtins(res.ids[0], lastScan.gtins); openQty(res.ids[0], res.via); return }
   if (res.ids.length > 1) lastScan.gtins = [];
   // 품번 바코드(1P·2차원 코드·QR)가 있는데 목록에 없으면 고르기 화면 없이 바로 등록
-  if (!res.ids.length && !(res.near || []).length && lastScan.models.length && codes.some(x => ["1p", "mh10", "csqr"].includes(parseCode(x.f, x.t).kind))) { buzz(); openReg({ mode: "label", from: "사진" }); return }
+  if (!res.ids.length && !(res.near || []).length && lastScan.models.length && (hintModel || codes.some(x => ["1p", "mh10", "csqr"].includes(parseCode(x.f, x.t).kind)))) { buzz(); openReg({ mode: "label", from: "사진" }); return }
   showPick({ exact: res.ids, near: res.near || [] });
 }
 // 읽은 글자 줄들 -> 맞는 자재 (exact: 품번과 같은 낱말이 있음, near: 한 글자 다름)
@@ -1049,7 +1055,9 @@ function parseLabel(ls, knownModel, scan, allLs) {
   if (alt && norm(alt) !== norm(out.model)) out.remark = "모델명: " + alt;
   // 규격(라벨 문장): QR 설명 > 'PRODUCT DESCRIPTION' 아래 줄 > 품번 줄 아래 줄들 > 'ITEM:' > 가장 그럴듯한 줄
   const okDesc = l => l && l.length >= 4 && !DESC_STOP.test(l) && !JUNK.test(l) && letterRatio(l) >= 0.4 && !codeLike(l.replace(BRAND_WORDS, "").trim());
-  const takeFrom = i => { const d = []; for (let j = i; j < L.length && d.length < 4; j++) { if (!okDesc(L[j])) break; d.push(L[j]) } return d.join(" ") };
+  // 줄 끝의 깨진 조각(4 ns a i 같은 것)을 떼고, 바코드 밑 글자((1P)…)·QC 줄에서 멈춤
+  const tidy = l => { const t = l.split(/\s+/); const bad = w => { w = w.replace(/[^A-Za-z0-9가-힣)%.\-\/]+$/g, ""); return !goodTok(w) || (w.length <= 2 && !DESC_WORDS.has(w.toUpperCase())) }; while (t.length > 1 && bad(t[t.length - 1])) t.pop(); return t.join(" ") };
+  const takeFrom = i => { const d = []; for (let j = i; j < L.length && d.length < 4; j++) { if (!okDesc(L[j]) || /\(1P\)|QC|^\d+$/.test(L[j]) || !lineOk(tidy(L[j]))) break; d.push(tidy(L[j])) } return d.join(" ") };
   const dIdx = L.findIndex(l => /PRODUCT DESCRIPTION|PART DESC|DESCRIPTION\s*:?$/i.test(l));
   if (scan.desc) out.desc = scan.desc;
   else if (dIdx >= 0 && L[dIdx + 1]) { const d = []; for (let j = dIdx + 1; j < L.length && d.length < 2; j++) { if (DESC_STOP.test(L[j])) break; d.push(L[j]) } out.desc = d.join(" ") }
