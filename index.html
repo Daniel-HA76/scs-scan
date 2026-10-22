@@ -88,6 +88,7 @@ button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); ou
 .how { font-size: 13px; color: var(--ok); font-weight: 500 }
 
 .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
+#condSeg { grid-template-columns: repeat(3, 1fr) }
 .seg button { min-height: 50px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--card); font-size: 17px; font-weight: 500 }
 .seg button[aria-pressed="true"] { border-color: var(--fg); background: var(--fg); color: var(--bg) }
 
@@ -206,7 +207,7 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
 
   <!-- 찍기 -->
   <section class="main" id="scrScan" hidden>
-    <div class="notice" id="replaceNote" hidden><b>바꿀 품목을 찍으세요.</b> <button class="link" data-act="cancelReplace">그만두기</button></div>
+    <div class="notice" id="replaceNote" hidden><b>맞는 자재를 찍거나 [목록에서 찾기]로 고르세요.</b> <button class="link" data-act="cancelReplace">그만두기</button></div>
     <div class="notice" id="unsentNote" hidden></div>
     <p class="say" id="scanSay">라벨을 네모 안에 비추세요</p>
     <div class="cam">
@@ -266,7 +267,7 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
     </div>
     <div class="row2">
       <button class="big plain" data-act="regCancel">그만두기</button>
-      <button class="big primary" data-act="regSave">등록하고 세기</button>
+      <button class="big primary" data-act="regSave" id="regSaveBtn">등록하고 세기</button>
     </div>
     <input type="file" id="regFile" accept="image/*" capture="environment" hidden>
   </section>
@@ -323,8 +324,7 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetHd">
     <div class="hd" id="sheetHd">이 줄 고치기</div>
     <div class="item" id="sheetItem"></div>
-    <button class="big plain" data-act="lnQty">수량 바꾸기</button>
-    <button class="big plain" data-act="lnItem">품목 바꾸기</button>
+    <button class="big plain" data-act="lnQty">내용 수정</button>
     <button class="big danger" data-act="lnDel">지우기</button>
     <button class="big plain" data-act="sheetClose">닫기</button>
   </div>
@@ -359,7 +359,8 @@ const KEY = "scs_scan_v1";
 function load(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d } catch (e) { return d } }
 function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true } catch (e) { return false } }
 function del(k) { try { localStorage.removeItem(k) } catch (e) {} }
-const S = Object.assign({ user: "", introSeen: false, session: null, upc: {}, device: "", newMats: [], rmEdits: [], seq: 0 }, load(KEY, {}));
+const S = Object.assign({ user: "", introSeen: false, session: null, upc: {}, device: "", newMats: [], rmEdits: [], matEdits: [], seq: 0 }, load(KEY, {}));
+if (!S.matEdits) S.matEdits = [];
 if (!S.device) S.device = "D" + Math.random().toString(36).slice(2, 8).toUpperCase();
 function persist() { if (!save(KEY, S)) toast("폰 저장 공간이 부족해요. [끝] → [보내기]를 먼저 해 주세요", true) }
 
@@ -408,6 +409,7 @@ async function loadData() {
   S.newMats = S.newMats.filter(n => !(n.id && ids.has(n.id) && n.synced));
   for (const n of S.newMats) if (!ids.has(n.id)) D.materials.push(newMatRow(n));
   for (const e of S.rmEdits) { const m = D.materials.find(x => x.id === e.id); if (m) m.r = e.r }
+  for (const e of S.matEdits) { const m = D.materials.find(x => x.id === e.id); if (m) for (const k of ["n", "s", "f", "m", "u", "pu", "pq", "r"]) m[k] = e[k] }
   buildIndex();
   KW = (D.keywords || []).map(([std, syn]) => [String(syn).toLowerCase(), String(std).toLowerCase()]);
   Object.assign(S.upc, D.upc || {});
@@ -439,18 +441,46 @@ function show(id) {
   $("bandWho").textContent = S.user ? S.user + " ▾" : "";
   if (id === "scrScan") { lastScan = null; camOn() } else camOff();
   window.scrollTo(0, 0);
+  armBack();
 }
+
+/* ===== 폰 뒤로 가기 버튼 =====
+   한 페이지 앱이라 그냥 두면 뒤로 가기에 앱이 닫힘 → 기록을 하나 넣어 두고, 누르면 앱 안의 이전 화면으로.
+   찍기 첫 화면에서는 한 번 더 누르면 닫힘 */
+let backArmed = false, exitAsk = 0;
+function armBack() { if (backArmed) return; try { history.pushState({ scs: 1 }, ""); backArmed = true } catch (e) {} }
+function goBack() {
+  if (!$("rmBg").hidden) { $("rmBg").hidden = true; return true }
+  if (!$("sheetBg").hidden) { closeSheet(); return true }
+  switch (cur) {
+    case "scrQty": $("qtyNoBtn").click(); return true;
+    case "scrReg": regBack(); return true;
+    case "scrPick": case "scrSearch": case "scrSum": show("scrScan"); return true;
+    case "scrBusy": return true;
+    case "scrName": if (S.user) { show("scrScan"); return true } return false;
+    case "scrScan": if (replacing) { replacing = null; show(backAfterEdit); if (backAfterEdit === "scrSum") renderSum(); return true } return false;
+    default: return false;
+  }
+}
+window.addEventListener("popstate", () => {
+  backArmed = false;
+  if (goBack()) { armBack(); return }
+  if (Date.now() - exitAsk < 2500) { history.back(); return }
+  exitAsk = Date.now(); toast("뒤로 버튼을 한 번 더 누르면 앱이 닫혀요"); armBack();
+});
 
 /* ===== 실사 줄 ===== */
 function lines() { return S.session ? S.session.lines : [] }
 function ensureSession() { if (!S.session) S.session = { id: "S" + Date.now().toString(36).toUpperCase(), mode: "실사", startedAt: new Date().toISOString(), lines: [] } }
 function lineDesc(l) {
   const m = MAT[l.mat];
-  if (l.cond === "개봉품") return "쓰던 것 " + fmt(l.rem) + " " + (m ? m.u : "");
+  if (l.cond === "개봉품") return "개봉품 " + fmt(l.rem) + " " + (m ? m.u : "");
   const u = m ? (canOpen(m) && l.cond === "신품" ? m.pu : m.u) : "개";
-  return (l.cond === "중고" ? "중고 " : "") + fmt(l.qty) + " " + u;
+  return (m ? l.cond + " " : "") + fmt(l.qty) + " " + u;
 }
 function matTitle(m) { return m ? m.n : "모르는 품목" }
+// 앱에서 새로 등록하고 아직 엑셀 자재목록에 안 들어간 자재만 등록 내용을 고칠 수 있음 (기존 자재는 비고만)
+const canEditMat = m => !!(m && (m.local || m.app));
 function soFar(matId, cond) {
   let q = 0, n = 0, rs = [];
   for (const l of lines()) if (l.mat === matId && l.cond === cond && (!editing || l.id !== editing.id)) { if (cond === "개봉품") { n++; rs.push(l.rem) } else q += l.qty }
@@ -794,13 +824,12 @@ function openQty(matId, how) {
 }
 function startQty(matId, how, cond, val) {
   const m = MAT[matId] || null;
-  if (m && !canOpen(m) && cond === "개봉품") cond = "신품";
-  if (m && canOpen(m) && cond === "중고") cond = "신품";
   qtyCtx = { mat: matId, how, cond, val: val ? String(val) : "", warned: false, fresh: !!val }; // fresh: 고칠 때 첫 숫자는 덮어씀
-  $("qtyItem").innerHTML = m ? `<div class="how">${esc(how || "")}</div><div class="nm">${esc(m.n)}${m.local ? '<span class="tag">새로 등록</span>' : ""}</div><div class="sp2">${esc(m.s)}</div><div class="md"><span>${esc(m.f)}</span><span class="code">${esc(m.m)}</span></div><div class="rmline"><span>비고 ${esc(m.r || "없음")}</span><button class="link" data-act="rmOpen" data-id="${esc(m.id)}">비고 고치기</button></div><div class="sofar" id="soFar"></div>`
+  $("qtyItem").innerHTML = m ? `<div class="how">${esc(how || "")}</div><div class="nm">${esc(m.n)}${m.local ? '<span class="tag">새로 등록</span>' : ""}</div><div class="sp2">${esc(m.s)}</div><div class="md"><span>${esc(m.f)}</span><span class="code">${esc(m.m)}</span></div><div class="rmline"><span>비고 ${esc(m.r || "없음")}</span>${canEditMat(m) ? `<button class="link" data-act="regEdit">등록 내용 고치기</button>` : `<button class="link" data-act="rmOpen" data-id="${esc(m.id)}">비고 고치기</button>`}</div>${editing ? `<div class="rmline"><span>자재가 잘못 잡혔으면</span><button class="link" data-act="lnSwap">다른 자재로 바꾸기</button></div>` : ""}<div class="sofar" id="soFar"></div>`
     : `<div class="nm">모르는 품목</div><div class="sp2">사진을 남겨 두면 사무실에서 등록해요</div><div class="sofar" id="soFar"></div>`;
   $("qtyPhoto").hidden = !!m || !(qtyCtx.photo = editing ? getPhoto(editing.id) : lastPhoto); if (!m) $("qtyPhoto").src = qtyCtx.photo || "";
-  const segs = !m ? [] : canOpen(m) ? [["신품", "새 것 (" + m.pu + ")"], ["개봉품", "쓰던 것"]] : [["신품", "새 것"], ["중고", "중고"]];
+  // 신품·중고·개봉품을 늘 다 보여 주고 사람이 고름
+  const segs = !m ? [] : [["신품", "신품"], ["중고", "중고"], ["개봉품", "개봉품"]];
   $("condSeg").innerHTML = segs.map(([c, t]) => `<button data-act="cond" data-c="${c}" aria-pressed="${c === cond}">${esc(t)}</button>`).join("");
   $("condSeg").hidden = !segs.length;
   $("qtyNoBtn").textContent = editing ? "그만두기" : "아니에요";
@@ -810,15 +839,19 @@ function startQty(matId, how, cond, val) {
 function renderQty() {
   const c = qtyCtx, m = MAT[c.mat];
   const lot = c.cond === "개봉품";
-  $("qtySay").textContent = lot ? "얼마나 남았어요?" : "몇 개예요?";
-  $("qtyLabel").textContent = lot ? "쓰던 것 하나의 남은 양" : "지금 눈에 보이는 개수만";
+  const pk = m && canOpen(m);
+  $("qtySay").textContent = lot ? "몇 개 남았어요?" : "몇 개예요?";
+  $("qtyLabel").textContent = !m ? "지금 눈에 보이는 개수만"
+    : lot ? "개봉품: 뜯은 포장 하나에 남은 " + (/^(EA|SET|봉지)$/i.test(m.u) ? "낱개 수" : "양 (" + m.u + ")") + (pk ? " (한 " + m.pu + " = " + fmt(m.pq) + " " + m.u + ")" : "") + " · 뜯은 포장이 여럿이면 하나씩 넣으세요"
+    : c.cond === "신품" ? (pk ? "신품: 안 뜯은 " + m.pu + " 개수 (한 " + m.pu + " = " + fmt(m.pq) + " " + m.u + ")" : "신품: 새 것 개수")
+    : "중고: 쓰다가 돌아온 것 개수";
   $("qtyUnit").textContent = !m ? "개" : lot ? m.u : (canOpen(m) && c.cond === "신품" ? m.pu : m.u);
   $("qtyVal").textContent = c.val ? Number(c.val).toLocaleString("ko-KR") : "0"; $("qtyVal").classList.toggle("ph", !c.val);
   $("qtyWarn").hidden = true; $("pad").hidden = false;
   for (const b of $("condSeg").querySelectorAll("button")) b.setAttribute("aria-pressed", b.dataset.c === c.cond);
   const sf = $("soFar");
   if (sf && m) { const r = soFar(c.mat, c.cond);
-    sf.textContent = lot ? (r.n ? "쓰던 것 지금까지 " + r.n + "개 (" + r.rs.map(fmt).join(", ") + " " + m.u + ")" : "") : (r.q ? "지금까지 " + fmt(r.q) + " " + $("qtyUnit").textContent + " 넣었어요" : "") }
+    sf.textContent = lot ? (r.n ? "개봉품 지금까지 " + r.n + "개 (" + r.rs.map(fmt).join(", ") + " " + m.u + ")" : "") : (r.q ? "지금까지 " + fmt(r.q) + " " + $("qtyUnit").textContent + " 넣었어요" : "") }
 }
 $("pad").addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b || !qtyCtx) return;
@@ -832,7 +865,7 @@ function qtyOk() {
   if (!n) { toast("숫자를 먼저 누르세요", true); return }
   if (!c.warned) {
     let w = "";
-    if (c.cond === "개봉품" && m && n > m.pq) w = fmt(n) + " " + m.u + " 남았어요? 새 것 하나가 " + fmt(m.pq) + " " + m.u + "예요";
+    if (c.cond === "개봉품" && m && n > m.pq) w = fmt(n) + " " + m.u + " 남았어요? 안 뜯은 " + m.pu + " 하나가 " + fmt(m.pq) + " " + m.u + "예요";
     else if (c.cond !== "개봉품" && n >= CONFIG.BIG_QTY) w = fmt(n) + "개 맞아요?";
     if (w) { c.warned = true; $("qtyWarnMsg").textContent = w; $("qtyWarn").hidden = false; $("pad").hidden = true; return }
   }
@@ -891,9 +924,9 @@ function renderSum() {
     const by = c => arr.filter(l => l.cond === c);
     const parts = [];
     const nq = by("신품").reduce((s, l) => s + l.qty, 0), uq = by("중고").reduce((s, l) => s + l.qty, 0), lots = by("개봉품");
-    if (nq) parts.push((m && canOpen(m) ? "새 것 " : "") + fmt(nq) + " " + (m ? (canOpen(m) ? m.pu : m.u) : "개"));
+    if (nq) parts.push((m ? "신품 " : "") + fmt(nq) + " " + (m ? (canOpen(m) ? m.pu : m.u) : "개"));
     if (uq) parts.push("중고 " + fmt(uq) + " " + (m ? m.u : ""));
-    if (lots.length) parts.push("쓰던 것 " + lots.length + "개");
+    if (lots.length) parts.push("개봉품 " + lots.length + "개");
     const detail = [];
     if (by("신품").length > 1) detail.push(by("신품").map(l => fmt(l.qty)).join(" + "));
     if (lots.length) detail.push(lots.map(l => fmt(l.rem)).join(", ") + " " + m.u);
@@ -907,7 +940,7 @@ function renderSum() {
 }
 
 /* ===== 보내기 ===== */
-// 엑셀 장부와 같은 규칙: 신품·중고 수량은 기준단위(m·EA …)로, 쓰던 것(개봉품)은 한 개마다 남은 양
+// 엑셀 장부와 같은 규칙: 신품·중고 수량은 기준단위(m·EA …)로, 개봉품은 한 개마다 남은 양
 function baseQty(l) { const m = MAT[l.mat]; return l.cond === "신품" && canOpen(m) ? l.qty * m.pq : l.qty }
 function exportRows() {
   const out = [];
@@ -925,13 +958,13 @@ async function send() {
   try {
     if (CONFIG.SCRIPT_URL) {
       const payload = { action: "submit", session: { id: S.session.id, mode: S.session.mode, startedAt: S.session.startedAt },
-        registrations: regs.map(n => Object.assign({}, n, { photo: getPhoto("reg_" + n.tmp) })), remarks: rms,
+        registrations: regs.map(n => Object.assign({}, n, { photo: getPhoto("reg_" + n.tmp) })), remarks: rms, matEdits: S.matEdits.filter(e => !e.synced),
         lines: ls.map(l => ({ id: l.id, t: l.t, by: l.by || S.user, mat: l.mat || "", model: (MAT[l.mat] || {}).m || "", cond: l.cond,
           qty: baseQty(l), rem: l.rem || 0, photo: l.mat ? "" : getPhoto(l.id), note: l.note || "" })) };
       const j = await apiPost(payload, 60000);
       for (const t in (j.map || {})) remapMat(t, j.map[t]);
       for (const e of rms) e.synced = true;
-      S.rmEdits = S.rmEdits.filter(e => !e.synced);
+      S.rmEdits = S.rmEdits.filter(e => !e.synced); S.matEdits = [];
     } else {
       if (typeof XLSX === "undefined") await loadScript("https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js");
       const rows = exportRows(), wb = XLSX.utils.book_new();
@@ -1101,7 +1134,27 @@ function chipRow(el, act, vals, cur, labelOf) {
   $(el).innerHTML = vals.map(v => `<button type="button" data-act="${act}" data-v="${esc(v)}" aria-pressed="${v === cur}">${esc(labelOf ? labelOf(v) : v)}</button>`).join("");
 }
 const EMPTY_P = { cands: [], model: "", mfr: "", desc: "", name: "", u: "EA", pu: "", pq: "", remark: "" };
+// 등록 화면에서 나갈 때: 등록 내용 고치기였으면 수량 화면으로, 아니면 찍기 화면으로
+function regBack() {
+  const b = regState && regState.back;
+  if (b) startQty(b.mat, b.how, b.cond, Number(b.val) || 0); else show("scrScan");
+}
 function openReg(o) {
+  if (o.mode === "edit") {
+    const m = MAT[o.id]; if (!m) return;
+    const n = S.newMats.find(x => x.id === o.id);
+    regState = { mode: "edit", id: o.id, photo: n ? getPhoto("reg_" + n.tmp) : null, u: m.u || "EA", pu: m.pu || "", dupOk: true, tgt: "rgSpec", lines: [], used: new Set(),
+      back: { mat: qtyCtx.mat, how: qtyCtx.how, cond: qtyCtx.cond, val: qtyCtx.val } };
+    $("regSay").textContent = "등록 내용 고치기";
+    $("regSub").textContent = "엑셀 자재목록에 들어가기 전까지 고칠 수 있어요. 사진을 찍으면 글자 버튼이 나와요";
+    $("rgModel").value = m.m || ""; $("rgMfr").value = m.f || ""; $("rgName").value = m.n || ""; $("rgSpec").value = m.s || ""; $("rgPq").value = m.pq || ""; $("rgRemark").value = m.r || "";
+    $("rgModelCands").innerHTML = "";
+    $("rgNameList").innerHTML = topValues("n", 400).map(v => `<option value="${esc(v)}">`).join("");
+    regChips(); regPhotoShow(); $("regDup").hidden = true; $("rgErr").hidden = true; regLinesShow([]);
+    $("regSaveBtn").textContent = "고친 내용 저장";
+    show("scrReg"); fitSpec(); return;
+  }
+  $("regSaveBtn").textContent = "등록하고 세기";
   const lab = o.mode === "label";
   const p = lab ? parseLabel(lastOcr, o.model || "", lastScan, lastOcrAll) : EMPTY_P;
   regState = { mode: o.mode, photo: lastPhoto, u: p.u, pu: p.pu, dupOk: false, tgt: lab ? "rgSpec" : "rgName", lines: [], used: new Set() };
@@ -1125,7 +1178,7 @@ function regChips() {
 }
 function regPhotoShow() {
   $("regPhoto").hidden = !regState.photo; if (regState.photo) $("regPhoto").src = regState.photo;
-  $("regPhotoBtn").textContent = regState.photo ? "사진 다시 찍기" : (regState.mode === "label" ? "라벨 사진 찍기" : "물건 사진 찍기 (꼭 필요해요)");
+  $("regPhotoBtn").textContent = regState.mode === "edit" ? "사진 찍어 글자 읽기" : regState.photo ? "사진 다시 찍기" : (regState.mode === "label" ? "라벨 사진 찍기" : "물건 사진 찍기 (꼭 필요해요)");
 }
 /* 사진에서 읽은 글자 줄 버튼: 누르면 고른 칸(모델명·품명·규격·비고)에 이어 붙음. 칸을 눌러도 그 칸이 골라짐 */
 const TGTS = [["rgModel", "모델명", "fdModel"], ["rgName", "품명", "fdName"], ["rgSpec", "규격", "fdSpec"], ["rgRemark", "비고", "fdRemark"]];
@@ -1170,21 +1223,22 @@ function regAddLine(i) {
 }
 // 줄 버튼: 창구(구글)가 있으면 그 결과. 없으면 영어 인식 줄 + 한글 인식에서 한글이 든 줄만
 async function regReadLines(c) {
-  const st = regState; regLinesShow(null, true);
+  const st = regState, job = (st.job = (st.job || 0) + 1); regLinesShow(null, true);   // 사진을 새로 찍으면 앞 사진 결과는 버림
+  const live = () => regState === st && st.job === job;
   try {
     let ls = await serverOcr(c);
     if (!ls || !ls.length) {
       const g = prep(c);
       const en = lastOcr.length ? lastOcr : await ocrLines(g);
-      if (regState !== st) return;
+      if (!live()) return;
       regLinesShow(en, true);
       const ko = (await ocrLinesKo(g)).filter(l => /[가-힣]{2,}/.test(l));
       ls = en.concat(ko);
     }
-    if (regState !== st) return;
+    if (!live()) return;
     regLinesShow(ls);
     return ls;
-  } catch (e) { if (regState === st) regLinesShow(regState.lines.length ? null : []) }
+  } catch (e) { if (live()) regLinesShow(regState.lines.length ? null : []) }
 }
 for (const [id] of TGTS) $(id).addEventListener("focus", () => regSetTgt(id));
 // 규격 칸은 글이 다 보이게 높이를 늘림
@@ -1240,6 +1294,7 @@ function regSave() {
   if (!v.s) return regErr("규격을 적어 주세요 (라벨 문장 그대로도 돼요)");
   if (v.pu && !(v.pq > 0)) return regErr("포장을 골랐으면 포장 하나에 든 양을 적어 주세요");
   if (!v.pu && v.pq > 0) return regErr("포장 하나에 든 양을 적었으면 포장(봉지·박스 등)도 골라 주세요");
+  if (regState.mode === "edit") return regSaveEdit(v);
   if (regState.mode !== "label" && !regState.photo) return regErr("물건 사진을 찍어 주세요");
   regErr("");
   // 같은 자재가 두 번 생기지 않게
@@ -1261,6 +1316,32 @@ function regSave() {
   lastPhoto = null;
   openQty(tmp, "새로 등록함");
 }
+// 등록 내용 고치기 저장: 폰 목록을 바로 고치고, 이미 창구에 올라간 자재면 창구에도 고친 내용을 보냄
+function regSaveEdit(v) {
+  const id = regState.id, m = MAT[id]; if (!m) return regBack();
+  const k = norm(v.m);
+  if (k.length >= 4 && CODE.has(k) && CODE.get(k) !== id) return regDupBox([CODE.get(k)], "같은 품번이 이미 다른 자재로 등록돼 있어요");
+  Object.assign(m, { n: v.n, s: v.s, f: v.f, m: v.m, u: v.u, pu: v.pu, pq: v.pq, r: v.r });
+  const n = S.newMats.find(x => x.id === id);
+  if (n) Object.assign(n, { n: v.n, s: v.s, f: v.f, m: v.m, u: v.u, pu: v.pu, pq: v.pq, r: v.r });
+  // 등록을 아직 올리는 중일 수도 있으니 늘 고친 내용을 따로 남김 (임시 번호면 번호를 받은 뒤 보냄)
+  S.matEdits = S.matEdits.filter(e => e.id !== id); S.matEdits.push(Object.assign({ id, by: S.user, at: new Date().toISOString() }, v));
+  buildIndex(); persist(); syncMatEdits();
+  toast("등록 내용을 고쳤어요");
+  regBack();
+}
+async function syncMatEdits() {
+  if (!CONFIG.SCRIPT_URL) return;
+  for (const e of S.matEdits.filter(x => !x.synced && !String(x.id).startsWith("N"))) {
+    try { await apiPost({ action: "editMat", edit: e }); e.synced = true }
+    catch (err) {
+      const t = String(err);
+      if (/imported|notfound|dup/.test(t)) { e.synced = true; toast(/imported/.test(t) ? "이미 엑셀 자재목록에 들어간 자재예요. PC [자재 관리]에서 고쳐 주세요" : /dup/.test(t) ? "같은 품번이 이미 있어서 창구에는 못 고쳤어요" : "창구에서 이 자재를 못 찾았어요", true) }
+      else return;
+    }
+  }
+  S.matEdits = S.matEdits.filter(x => !x.synced); persist();
+}
 async function syncReg(n) {
   if (!CONFIG.SCRIPT_URL || n.synced) return;
   try { const j = await apiPost({ action: "register", mat: Object.assign({}, n, { photo: getPhoto("reg_" + n.tmp) }) }); remapMat(n.tmp, j.id) } catch (e) {}
@@ -1272,11 +1353,12 @@ function remapMat(tmp, id) {
   for (const l of lines()) if (l.mat === was) l.mat = id;
   for (const u in S.upc) if (S.upc[u] === was) S.upc[u] = id;
   for (const e of S.rmEdits) if (e.id === was) e.id = id;
+  for (const e of S.matEdits) if (e.id === was) e.id = id;
   const exists = D.materials.some(m => m.id === id && m.id !== was);
   D.materials = D.materials.filter(m => !(m.id === was && exists));
   for (const m of D.materials) if (m.id === was) { m.id = id; m.local = false }
   if (qtyCtx && qtyCtx.mat === was) qtyCtx.mat = id;
-  buildIndex(); persist();
+  buildIndex(); persist(); syncMatEdits();
   if (cur === "scrScan") renderScan(); else if (cur === "scrSum") renderSum();
 }
 
@@ -1337,7 +1419,8 @@ document.addEventListener("click", e => {
     case "line": openSheet(b.dataset.id); break;
     case "sheetClose": closeSheet(); break;
     case "lnQty": { const l = sheetLine; $("sheetBg").hidden = true; editing = l; startQty(l.mat, "", l.cond, l.cond === "개봉품" ? l.rem : l.qty); break }
-    case "lnItem": { replacing = sheetLine; $("sheetBg").hidden = true; show("scrScan"); break }
+    case "lnSwap": { replacing = editing; editing = null; show("scrScan"); break }
+    case "regEdit": openReg({ mode: "edit", id: qtyCtx.mat }); break;
     case "lnDel": { const l = sheetLine, i = lines().indexOf(l); if (i >= 0) { S.session.lines.splice(i, 1); persist(); toast("지웠어요 · " + matTitle(MAT[l.mat]) + " " + lineDesc(l), false, { kind: "del", line: l, at: i }) }
       $("sheetBg").hidden = true; if (cur === "scrSum") renderSum(); else show("scrScan"); break }
     case "undo": if (toastCtx) { if (toastCtx.kind === "add") { const i = lines().findIndex(x => x.id === toastCtx.id); if (i >= 0) S.session.lines.splice(i, 1) } else if (toastCtx.kind === "del") { ensureSession(); S.session.lines.splice(Math.min(toastCtx.at, lines().length), 0, toastCtx.line) }
@@ -1350,7 +1433,7 @@ document.addEventListener("click", e => {
     case "noLabel": lastPhoto = null; lastOcr = []; lastOcrAll = []; lastScan = null; lastCanvas = null; openReg({ mode: "nolabel" }); break;
     case "regFromPhoto": openReg({ mode: "label", from: "사진" }); break;
     case "regTakePhoto": $("regFile").click(); break;
-    case "regCancel": show("scrScan"); break;
+    case "regCancel": regBack(); break;
     case "regSave": regSave(); break;
     case "regForce": regState.dupOk = true; $("regDup").hidden = true; regSave(); break;
     case "rgCand": $("rgModel").value = b.dataset.v; break;
@@ -1381,7 +1464,7 @@ function start() {
   if (S.session && S.session.lines.length) S.session.resumed = true;
   persist(); start();
   for (const n of S.newMats.filter(x => !x.synced)) syncReg(n);
-  syncRemarks();
+  syncRemarks(); syncMatEdits();
 })();
 document.addEventListener("visibilitychange", () => { if (document.hidden) camOff(); else if (cur === "scrScan") camOn() });
 </script>
