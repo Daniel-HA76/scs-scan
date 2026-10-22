@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#38424c">
@@ -165,14 +165,15 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
 .rgPhoto { display: flex; gap: 10px; align-items: center }
 .rgPhoto img { width: 132px; height: 76px; object-fit: cover; border-radius: 10px; flex: none }
 .rgPhoto button { flex: 1 }
-.rgPin { display: flex; flex-direction: column; gap: 8px; background: var(--bg) }
-.frow { display: flex; gap: 8px; align-items: flex-start }
-.flab { flex: none; min-height: 46px; padding: 0 12px; border-radius: 12px; border: 1.5px solid var(--lab-line); background: var(--lab-bg); color: var(--lab-fg); font-size: 15px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center }
+.rgPin { display: flex; flex-direction: column; gap: 4px; background: var(--bg) }
+.frow { display: flex; gap: 6px; align-items: flex-start }
+.flab { flex: none; min-height: 34px; padding: 0 8px; border-radius: 10px; border: 1.5px solid var(--lab-line); background: var(--lab-bg); color: var(--lab-fg); font-size: 15px; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center }
+.frow > .flab { width: 108px }   /* 칸 이름 버튼 폭을 같게 해서 입력칸이 가지런히 */
 .flab[aria-pressed="true"] { background: var(--lab-on); border-color: var(--lab-on); color: #fff }
 .flab.static { cursor: default }
 .fin { flex: 1; min-width: 0; position: relative }
-.fin .txt { min-height: 46px; padding: 11px 12px }
-#rgSpec { min-height: 0; height: auto; resize: none; overflow-y: auto; max-height: calc(2 * 1.4em + 24px); line-height: 1.4 }
+.fin .txt { min-height: 34px; padding: 4px 10px; line-height: 1.35; border-radius: 10px }
+#rgSpec { min-height: 0; height: auto; resize: none; overflow-y: auto; max-height: calc(2 * 1.35em + 11px); line-height: 1.35 }
 .frow.on .txt { border-color: var(--lab-on); box-shadow: 0 0 0 2px var(--lab-ring) }
 .ac { position: absolute; left: 0; right: 0; top: 100%; z-index: 30; background: var(--card); border: 1.5px solid var(--fg); border-top: none; border-radius: 0 0 12px 12px; overflow: hidden; box-shadow: 0 6px 14px rgba(0,0,0,.12) }
 .ac button { display: block; width: 100%; text-align: left; padding: 10px 12px; border-top: 1px solid var(--line); font-size: 15px; background: var(--card) }
@@ -180,10 +181,12 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
 .ac button small { color: var(--muted); margin-left: 6px }
 .pickbar { display: none; flex-direction: column; gap: 6px }
 .flabs { display: flex; flex-wrap: wrap; gap: 6px }
-.flabs .flab { min-height: 38px; font-size: 14px }
+.flabs { gap: 4px }
+.flabs .flab { min-height: 34px; font-size: 15px }
 .hint { font-size: 13px; color: var(--muted) }
 .hint b { color: var(--fg) }
 .rgRest { display: flex; flex-direction: column; gap: 12px; padding-top: 4px }
+#rgRest .row2 .big { font-size: 17px; padding: 0 6px }   /* 좁은 폰(360px)에서도 '등록 후 수량 입력'이 한 줄에 */
 .ocrbox { border-top: 1.5px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 10px }
 .ocrbox .hd { font-size: 13px; color: var(--muted) }
 .ocrbox .hd b { color: var(--fg) }
@@ -201,6 +204,10 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
 #scrReg.picking .rgPin .frow:not(.on) { display: none }
 #scrReg.picking .pickbar { display: flex }
 #scrReg.picking .ocrbox { border-top: none; padding-top: 4px }
+#scrReg.picking.kb .rgPin { padding-top: 6px; padding-bottom: 6px }
+#scrReg.picking.kb #rgPickHint { display: none }
+/* 자판이 화면을 덮기만 하는 폰(대비책): 보이는 화면 맨 위로 띠·고정 줄을 내림 (--vv-top = 가려진 높이) */
+#scrReg.picking .rgPin, .band { transform: translateY(var(--vv-top, 0px)) }
 .chips2 button.code { font-family: var(--f-code) }
 .row2b { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end }
 .okbox { background: var(--ok-bg); color: var(--ok); border-radius: 12px; padding: 10px 14px; font-size: 15px }
@@ -284,11 +291,11 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
     </div>
     <!-- 입력 칸: 칸 이름(버튼)을 누르면 그 칸이 위에 고정되고 아래 선택지만 넘어감 -->
     <div class="rgPin" id="rgPin">
-      <div class="frow" id="fdName"><button type="button" class="flab" data-act="rgTgt" data-v="rgName">품명</button><div class="fin"><input class="txt" id="rgName" autocomplete="off" placeholder="예: Patch Cord, 라벨 프린터"><div class="ac" id="ac_rgName" hidden></div></div></div>
-      <div class="frow" id="fdModel"><button type="button" class="flab" data-act="rgTgt" data-v="rgModel">모델명(품번)</button><div class="fin"><input class="txt code" id="rgModel" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="라벨에 크게 적힌 번호"><div class="ac" id="ac_rgModel" hidden></div></div></div>
-      <div class="frow" id="fdSpec"><button type="button" class="flab" data-act="rgTgt" data-v="rgSpec">규격</button><div class="fin"><textarea class="txt" id="rgSpec" rows="2" spellcheck="false" placeholder="라벨 문장 그대로 넣어도 됩니다"></textarea></div></div>
-      <div class="frow" id="fdMfr"><button type="button" class="flab" data-act="rgTgt" data-v="rgMfr">제조사</button><div class="fin"><input class="txt" id="rgMfr" autocomplete="off" placeholder="예: Panduit, EPSON"><div class="ac" id="ac_rgMfr" hidden></div></div></div>
-      <div class="frow" id="fdRemark"><button type="button" class="flab" data-act="rgTgt" data-v="rgRemark">비고</button><div class="fin"><input class="txt" id="rgRemark" autocomplete="off" placeholder="예: 상품번호, 3층 IDF용"></div></div>
+      <div class="frow" id="fdName"><button type="button" class="flab" data-act="rgTgt" data-v="rgPmn">품명</button><div class="fin"><input class="txt" id="rgPmn" name="scs_f1" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="예: Patch Cord, 라벨 프린터"><div class="ac" id="ac_rgPmn" hidden></div></div></div>
+      <div class="frow" id="fdModel"><button type="button" class="flab" data-act="rgTgt" data-v="rgModel">모델명(품번)</button><div class="fin"><input class="txt code" id="rgModel" name="scs_f2" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false" placeholder="라벨에 크게 적힌 번호"><div class="ac" id="ac_rgModel" hidden></div></div></div>
+      <div class="frow" id="fdSpec"><button type="button" class="flab" data-act="rgTgt" data-v="rgSpec">규격</button><div class="fin"><textarea class="txt" id="rgSpec" name="scs_f3" rows="2" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="라벨 문장 그대로 넣어도 됩니다"></textarea></div></div>
+      <div class="frow" id="fdMfr"><button type="button" class="flab" data-act="rgTgt" data-v="rgMfr">제조사</button><div class="fin"><input class="txt" id="rgMfr" name="scs_f4" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="예: Panduit, EPSON"><div class="ac" id="ac_rgMfr" hidden></div></div></div>
+      <div class="frow" id="fdRemark"><button type="button" class="flab" data-act="rgTgt" data-v="rgRemark">비고</button><div class="fin"><input class="txt" id="rgRemark" name="scs_f5" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="예: 다른 번호: C51CF05520, 3층 IDF용"></div></div>
       <div class="pickbar" id="rgPickBar">
         <p class="hint" id="rgPickHint"></p>
         <div class="flabs" id="rgOtherTgts"></div>
@@ -297,7 +304,7 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
     <div class="rgRest" id="rgRest">
       <div class="fld"><span>단위 (하나씩 셀 때)</span><div class="chips2" id="rgUnitChips"></div></div>
       <div class="fld"><span>포장 (봉지·박스로 올 때)</span><div class="chips2" id="rgPuChips"></div></div>
-      <div class="frow"><span class="flab static">포장에 든 양</span><div class="fin"><input class="txt" id="rgPq" inputmode="decimal" autocomplete="off" placeholder="포장이 없으면 비워 둡니다"></div></div>
+      <div class="frow"><span class="flab static">포장에 든 양</span><div class="fin"><input class="txt" id="rgPq" name="scs_f6" inputmode="decimal" autocomplete="off" autocorrect="off" placeholder="포장이 없으면 비워 둡니다"></div></div>
       <p class="errline" id="rgErr" hidden></p>
       <div class="row2">
         <button class="big plain" data-act="regCancel">그만두기</button>
@@ -315,7 +322,7 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
   <!-- 검색 -->
   <section class="main" id="scrSearch" hidden>
     <p class="say">이름으로 찾기</p>
-    <input class="find" id="findBox" type="search" autocomplete="off" placeholder="예: 모듈 팬듀잇 캣6a" aria-label="찾을 품목">
+    <input class="find" id="findBox" name="scs_q" type="search" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="예: 모듈 팬듀잇 캣6a" aria-label="찾을 품목">
     <p class="tiny center" id="findCount" style="margin:0">한글로도 찾습니다. 띄어 쓰면 모두 들어간 것만 나옵니다</p>
     <div class="cands" id="findList"></div>
     <button class="big plain" data-act="backScan">찍기로 돌아가기</button>
@@ -373,7 +380,7 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
   <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="rmHd">
     <div class="hd" id="rmHd">비고 수정</div>
     <div class="item" id="rmItem"></div>
-    <textarea class="txt" id="rmText" spellcheck="false" placeholder="예: 3층 창고 왼쪽 선반, 박스 찢어짐"></textarea>
+    <textarea class="txt" id="rmText" name="scs_f7" autocomplete="off" spellcheck="false" placeholder="예: 3층 창고 왼쪽 선반, 박스 찢어짐"></textarea>
     <button class="big primary" data-act="rmSave">비고 저장</button>
     <button class="big plain" data-act="rmClose">닫기</button>
   </div>
@@ -390,7 +397,7 @@ input.txt.code { font-family: var(--f-code); letter-spacing: .02em }
 const CONFIG = {
   SCRIPT_URL: "https://script.google.com/macros/s/AKfycbyhuiMHursNOZZknzEwk7as9JcFmxck1FlwoqMZ89D-I3FcdhCG0b1mfJrdQ2Mk6Hb5Aw/exec",         // 구글 Apps Script 웹 앱 주소 (…/exec)
   SCRIPT_KEY: "93f0816da47f4397",         // 구글 시트 Config 탭의 KEY 값
-  APP_VERSION: "scan 0.4", BIG_QTY: 500 };
+  APP_VERSION: "scan 0.5", BIG_QTY: 500 };
 try { const o = JSON.parse(localStorage.getItem("scs_config") || "null"); if (o && o.url) { CONFIG.SCRIPT_URL = o.url; CONFIG.SCRIPT_KEY = o.key || "" } } catch (e) {}
 try { const q = new URLSearchParams(location.search); if (q.get("api")) { CONFIG.SCRIPT_URL = q.get("api"); CONFIG.SCRIPT_KEY = q.get("key") || ""; localStorage.setItem("scs_config", JSON.stringify({ url: CONFIG.SCRIPT_URL, key: CONFIG.SCRIPT_KEY })) } } catch (e) {}
 
@@ -455,12 +462,19 @@ async function loadData() {
   Object.assign(S.upc, D.upc || {});
   return true;
 }
+// 비고에서 다른 번호 꺼내기: '다른 번호: A, B; …' (예전 표기 '모델명: …'도)
+function altNums(r) {
+  const out = [], re = /(?:다른\s*번호|모델명)\s*[:：]\s*([^;]+)/g; let m;
+  while ((m = re.exec(String(r || ""))) !== null) for (const x of m[1].split(",")) if (x.trim()) out.push(x.trim());
+  return out;
+}
 function newMatRow(n) { return { id: n.id, n: n.n, s: n.s, f: n.f, m: n.m, a: [], u: n.u, pu: n.pu, pq: n.pq, r: n.r, app: 1, local: !n.synced } }
 function buildIndex() {
   MAT = {}; CODE = new Map(); CODES = [];
   for (const m of D.materials) {
     MAT[m.id] = m;
-    for (const c of [m.m].concat(m.a || [])) {
+    m.x = [...new Set((m.a || []).concat(altNums(m.r)))].filter(c => norm(c) !== norm(m.m));   // 다른 번호들
+    for (const c of [m.m].concat(m.x)) {
       const k = norm(c); if (k.length < 4) continue;
       if (!CODE.has(k)) CODE.set(k, m.id);
       CODES.push({ k, id: m.id });
@@ -482,6 +496,7 @@ function show(id) {
   if (id === "scrScan") { lastScan = null; camOn() } else camOff();
   window.scrollTo(0, 0);
   armBack();
+  kbSync();
 }
 
 /* ===== 폰 뒤로 가기 버튼 =====
@@ -575,13 +590,13 @@ function parseCode(fmt, text) {
     return { kind: "csqr", model: m ? m[1] : (mid ? mid[1] : ""), desc: d ? d[1].trim() : "" };
   }
   if (/^HTTPS?:/.test(u) || F === "CODE93") return { kind: "skip" };
+  if (F === "CODE128" && /^[17]\d{8}$/.test(u)) return { kind: "plain", model: u };   // CommScope 9자리 자재번호 (비고의 '다른 번호'로 찾음. 상품 바코드 길이가 아님)
   if (/^\d{8,14}$/.test(u)) { const g = gtin14(u); return { kind: "gtin", gtin: g, box: F === "ITF" && /^[1-8]/.test(g) } }
   let m = u.match(/^\(?3P\)?\s*(\d{8,14})$/); if (m) return { kind: "gtin", gtin: gtin14(m[1]) };
   m = u.match(/^\(?1P\)?\s*([A-Z0-9][A-Z0-9\-\/\.=+ ]{2,40})$/); if (m) return { kind: "1p", model: m[1].trim() };
   if (/^\(?\d?Q\)?\s*\d{1,5}(\s*(EA|PC|PCS))?$/.test(u)) return { kind: "skip" };
   if (/^S[0-9A-Z]{8,}$/.test(u)) return { kind: "skip" };
   if (/^(CODE128|CODE39)$/.test(F) && /^[A-Z0-9][A-Z0-9\-\.]{3,29}$/.test(u) && /[A-Z]/.test(u) && /\d/.test(u) && u.includes("-")) return { kind: "plain", model: u };
-  if (F === "CODE128" && /^[17]\d{8}$/.test(u)) return { kind: "plain", model: u };   // CommScope 9자리 자재번호
   return { kind: "other", raw: u };
 }
 function upcFind(g) { if (!g) return null; return S.upc[g] || S.upc[itemGtin(g)] || S.upc[g.replace(/^0+/, "")] || S.upc[itemGtin(g).replace(/^0+/, "")] || null }
@@ -735,7 +750,7 @@ function identify(codes, ls) {
   const r = idFromCodes(codes);
   if (r.ids.size) return { ids: [...r.ids], via: "바코드로 찾음", scan: r };
   const m = matchText(ls || []);
-  return { ids: m.exact, near: m.near, via: m.exact.length ? "품번 글자로 찾음" : "", scan: r };
+  return { ids: m.exact, near: m.near, via: m.exact.length ? "모델명(품번) 글자로 찾음" : "", scan: r };
 }
 async function readPhoto(c, f, hintModel) {
   lastPhoto = thumb(c); lastOcr = []; lastOcrAll = []; lastScan = null; lastCanvas = c; lastOcrServer = false;
@@ -816,8 +831,8 @@ function candHtml(ids) {
 }
 function showPick(res, all) {
   const ids = res.exact.length ? res.exact : res.near;
-  $("pickSay").textContent = ids.length ? "어느 자재입니까?" : "품번을 찾지 못했습니다";
-  $("pickSub").textContent = ids.length ? (res.exact.length ? "사진에 품번이 여러 개 보입니다. 지금 세는 것을 고르세요" : "한 글자가 다른 품번입니다. 맞는지 확인하세요") : "다시 찍거나, 목록에서 찾거나, 모르는 품목으로 남기세요";
+  $("pickSay").textContent = ids.length ? "어느 자재입니까?" : "모델명(품번)을 찾지 못했습니다";
+  $("pickSub").textContent = ids.length ? (res.exact.length ? "사진에 모델명(품번)이 여러 개 보입니다. 지금 세는 것을 고르세요" : "한 글자가 다른 모델명(품번)입니다. 맞는지 확인하세요") : "다시 찍거나, 목록에서 찾거나, 모르는 품목으로 남기세요";
   $("pickPhoto").src = lastPhoto || ""; $("pickPhoto").hidden = !lastPhoto;
   $("pickList").innerHTML = candHtml(ids);
   show("scrPick");
@@ -836,7 +851,7 @@ function searchMat(q) {
   });
   const out = [];
   for (const m of D.materials) {
-    const hay = (m.n + " " + m.s + " " + m.f + " " + m.m + " " + (m.a || []).join(" ")).toLowerCase();
+    const hay = (m.n + " " + m.s + " " + m.f + " " + m.m + " " + (m.x || m.a || []).join(" ")).toLowerCase();
     if (sets.every(ts => ts.some(t => hay.includes(t)))) out.push(m);
   }
   const q1 = norm(q);
@@ -985,7 +1000,7 @@ function baseQty(l) { const m = MAT[l.mat]; return l.cond === "신품" && canOpe
 function exportRows() {
   const out = [];
   for (const l of lines()) { const m = MAT[l.mat] || {};
-    out.push({ 구분: S.session.mode, 실사번호: S.session.id, 작업자: l.by || S.user, 시각: l.t, MaterialID: l.mat || "", 모델명: m.m || "", 품명: m.n || "모르는 품목", 규격: m.s || "", 제조사: m.f || "",
+    out.push({ 구분: S.session.mode, 실사번호: S.session.id, 작업자: l.by || S.user, 시각: l.t, MaterialID: l.mat || "", 품명: m.n || "모르는 품목", "모델명(품번)": m.m || "", 규격: m.s || "", 제조사: m.f || "",
       상태: l.cond, 센수량: l.qty, 센단위: m.id ? (l.cond === "개봉품" ? (m.pu || "개") : (canOpen(m) && l.cond === "신품" ? m.pu : m.u)) : "", 기준수량: l.cond === "개봉품" ? "" : baseQty(l), 기준단위: m.u || "",
       남은양: l.cond === "개봉품" ? l.rem : "", 줄ID: l.id, 사진: l.mat ? "" : (getPhoto(l.id) ? "있음" : "") }) }
   return out;
@@ -1010,9 +1025,9 @@ async function send() {
       const rows = exportRows(), wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "실사_줄별");
       const g = {}; for (const r of rows) { const k = (r.MaterialID || r.줄ID) + "|" + r.상태; (g[k] = g[k] || Object.assign({}, r, { 기준수량: 0, 개수: 0, 남은양: [] })); g[k].개수 += r.센수량; if (r.기준수량 !== "") g[k].기준수량 += r.기준수량; if (r.남은양 !== "") g[k].남은양.push(r.남은양) }
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(Object.values(g).map(r => ({ MaterialID: r.MaterialID, 모델명: r.모델명, 품명: r.품명, 규격: r.규격, 상태: r.상태,
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(Object.values(g).map(r => ({ MaterialID: r.MaterialID, 품명: r.품명, "모델명(품번)": r["모델명(품번)"], 규격: r.규격, 제조사: r.제조사, 상태: r.상태,
         합계: r.상태 === "개봉품" ? r.개수 + "개" : r.기준수량, 기준단위: r.기준단위, 남은양목록: r.남은양.join(", ") }))), "실사_품목별");
-      if (regs.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(regs.map(n => ({ 임시번호: n.id, 품명: n.n, 규격: n.s, 제조사: n.f, 모델명: n.m, 기준단위: n.u,
+      if (regs.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(regs.map(n => ({ 임시번호: n.id, 품명: n.n, "모델명(품번)": n.m, 규격: n.s, 제조사: n.f, 기준단위: n.u,
         포장단위: n.pu, 포장수량: n.pq || "", 비고: n.r, 등록경로: n.src, 등록자: n.by, 등록시각: n.at }))), "새_자재");
       if (rms.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rms.map(e => ({ MaterialID: e.id, 새비고: e.r, 전비고: e.old, 고친사람: e.by, 시각: e.at }))), "비고_수정");
       XLSX.writeFile(wb, "SCS_실사_" + S.session.id + ".xlsx");
@@ -1128,19 +1143,20 @@ function parseLabel(ls, knownModel, scan, allLs) {
   });
   // 바코드로 안 품번도 글자 줄 위치를 찾아 둠 (그 아래 줄이 설명)
   for (const k of sc.keys()) if (!at.has(k)) { const i = L.findIndex(l => norm(l).includes(norm(k))); if (i >= 0) at.set(k, i) }
-  // CommScope: 9자리 자재번호(760…·108…·700…)를 모델명으로 (기존 목록과 같은 방식), 글자 품번은 비고에 '모델명:'
+  // 번호가 둘이면 라벨에 크게 적힌 번호 = 모델명(품번), 나머지 = 비고 '다른 번호: …'
+  // CommScope: 품명식 번호(MGS600-262 등)가 모델명(품번), 9자리 자재번호(760…·108…·700…)는 다른 번호
   let alt = "";
   if (out.mfr === "CommScope") {
     const num = [...sc.keys()].find(k => /^[17]\d{8}$/.test(k));
     if (num) {
       const named = [...sc.entries()].filter(([k]) => k !== num && /[A-Z]/.test(k)).sort((x, y) => y[1] - x[1])[0];
-      sc.set(num, Math.max(sc.get(num), 95)); if (named && named[1] >= 20) alt = named[0];
+      if (named && named[1] >= 20) { sc.set(named[0], Math.max(named[1], sc.get(num) + 1, 95)); alt = num }
     }
   }
   out.cands = [...sc.entries()].sort((x, y) => y[1] - x[1]).map(x => x[0]).slice(0, 6);
   out.model = out.cands[0] || "";
   if (!alt && out.cands[1]) { const d = L.findIndex(l => /PRODUCT DESCRIPTION/i.test(l)); if (d >= 0 && L[d + 1] && norm(L[d + 1]).startsWith(norm(out.cands[1])) && /[A-Z]/.test(out.cands[1])) alt = out.cands[1] }
-  if (alt && norm(alt) !== norm(out.model)) out.remark = "모델명: " + alt;
+  if (alt && norm(alt) !== norm(out.model)) out.remark = "다른 번호: " + alt;
   // 규격(라벨 문장): QR 설명 > 'PRODUCT DESCRIPTION' 아래 줄 > 품번 줄 아래 줄들 > 'ITEM:' > 가장 그럴듯한 줄
   const okDesc = l => l && l.length >= 4 && !DESC_STOP.test(l) && !JUNK.test(l) && letterRatio(l) >= 0.4 && !codeLike(l.replace(BRAND_WORDS, "").trim());
   // 줄 끝의 깨진 조각(4 ns a i 같은 것)을 떼고, 바코드 밑 글자((1P)…)·QC 줄에서 멈춤
@@ -1193,8 +1209,8 @@ function chipRow(el, act, vals, cur, labelOf) {
 }
 const EMPTY_P = { cands: [], model: "", mfr: "", desc: "", name: "", u: "EA", pu: "", pq: "", remark: "" };
 /* 등록 화면 입력 칸 (위에서부터 순서대로) */
-const FIELDS = [["rgName", "품명"], ["rgModel", "모델명(품번)"], ["rgSpec", "규격"], ["rgMfr", "제조사"], ["rgRemark", "비고"]];
-const FD = { rgName: "fdName", rgModel: "fdModel", rgSpec: "fdSpec", rgMfr: "fdMfr", rgRemark: "fdRemark" };
+const FIELDS = [["rgPmn", "품명"], ["rgModel", "모델명(품번)"], ["rgSpec", "규격"], ["rgMfr", "제조사"], ["rgRemark", "비고"]];
+const FD = { rgPmn: "fdName", rgModel: "fdModel", rgSpec: "fdSpec", rgMfr: "fdMfr", rgRemark: "fdRemark" };
 const fieldName = id => (FIELDS.find(f => f[0] === id) || ["", ""])[1];
 // 등록 화면에서 나갈 때: 등록 내용 고치기였으면 수량 화면으로, 아니면 찍기 화면으로
 function regBack() {
@@ -1204,7 +1220,7 @@ function regBack() {
 }
 function regFill(p, onlyEmpty) {
   const set = (id, v) => { if (onlyEmpty && $(id).value.trim()) return; $(id).value = v || ""; regState.auto[id] = !!v };
-  set("rgName", p.name); set("rgModel", p.model); set("rgSpec", p.desc); set("rgMfr", p.mfr); set("rgRemark", p.remark);
+  set("rgPmn", p.name); set("rgModel", p.model); set("rgSpec", p.desc); set("rgMfr", p.mfr); set("rgRemark", p.remark);
   if (!(onlyEmpty && $("rgPq").value.trim()) && p.pq) { $("rgPq").value = p.pq; regState.pu = p.pu; regState.u = p.u }
 }
 function openReg(o) {
@@ -1290,6 +1306,12 @@ function removeFrom(v, t) {
   let r = re.test(v) ? v.replace(re, "$1") : v.replace(new RegExp(reEsc(t), "i"), "");
   return r.replace(/\s{2,}/g, " ").replace(/^[\s,;:]+|[\s,;:]+$/g, "");
 }
+// 비고에서 번호 빼기: '다른 번호: X' 조각째로 빼고 남은 ';' 정리
+function removeAlt(v, w) {
+  const re = new RegExp("(^|;)\\s*다른 번호:\\s*" + reEsc(w) + "\\s*(?=;|$)", "i");
+  if (!re.test(v)) return removeFrom(v, w);
+  return v.replace(re, "$1").replace(/;\s*;/g, ";").replace(/^[\s;]+|[\s;]+$/g, "").replace(/;(?=\S)/g, "; ");
+}
 function regRender() {
   if (!regState) return;
   const t = regState.tgt, has = regState.groups.length, busy = regState.busy;
@@ -1305,7 +1327,21 @@ function regRender() {
   const v = t ? $(t).value : "";
   $("rgLines").innerHTML = regState.groups.map((g, gi) => `<div class="ogrp">${g.tag ? `<span class="tag2">${esc(g.tag)}</span>` : ""}${g.line ? `<button type="button" class="oln${inVal(v, g.line) ? " used" : ""}" data-act="rgChip" data-g="${gi}" data-w="-1">${esc(g.line)}</button>` : ""}<div class="ows">${g.words.map((w, wi) => `<button type="button" class="ow${inVal(v, w) ? " used" : ""}" data-act="rgChip" data-g="${gi}" data-w="${wi}">${esc(w)}</button>`).join("")}</div></div>`).join("");
   $("rgPickDone").hidden = !regState.picking;
+  kbSync();
 }
+/* 자판이 떠 있는 동안 (등록 화면 입력칸에 커서가 있을 때)
+   - kb: 고정 영역을 줄임 (안내 문구를 숨기고 입력칸 + 다른 칸 이름 버튼만)
+   - --vv-top: 자판이 화면을 덮기만 하고 페이지를 줄이지 않는 폰(대비책)에서 띠·고정 줄을 보이는 화면 맨 위로 내림 */
+function kbSync() {
+  const vv = window.visualViewport, a = document.activeElement;
+  const focused = !!(a && a.closest && a.closest("#rgPin") && /^(INPUT|TEXTAREA)$/.test(a.tagName));
+  $("scrReg").classList.toggle("kb", focused && cur === "scrReg");
+  const top = vv && cur === "scrReg" && regState && regState.picking ? Math.max(0, Math.round(vv.offsetTop)) : 0;
+  document.documentElement.style.setProperty("--vv-top", top + "px");
+}
+document.addEventListener("focusin", kbSync);
+document.addEventListener("focusout", () => setTimeout(kbSync, 60));
+if (window.visualViewport) { visualViewport.addEventListener("resize", kbSync); visualViewport.addEventListener("scroll", kbSync) }
 // 칸 이름을 누름: 그 칸을 위에 고정하고 아래 선택지만 넘어가게
 function regPick(id) {
   if (!regState) return;
@@ -1324,18 +1360,28 @@ function regChip(gi, wi) {
   const t = regState.tgt;
   if (!t) { toast("먼저 넣을 칸 이름(품명·모델명(품번)·규격·제조사·비고)을 누르세요", true); window.scrollTo(0, 0); return }
   const g = regState.groups[gi]; if (!g) return;
-  const text = wi < 0 ? g.line : g.words[wi], el = $(t); let v = el.value;
+  const word = wi < 0 ? g.line : g.words[wi], el = $(t); let v = el.value;
+  // 비고에 넣는 번호는 '다른 번호: …' 모양으로 (그 번호로도 자재가 찾아지게). 여러 개면 '; '로 나눔
+  const alt = t === "rgRemark" && wi >= 0 && codeLike(word) && /\d/.test(word);
+  const text = alt ? "다른 번호: " + word : word, sep = alt ? "; " : " ";
   if (document.activeElement === el) {
-    const a = el.selectionStart ?? v.length, b = el.selectionEnd ?? v.length, pre = v.slice(0, a), post = v.slice(b);
-    const s1 = pre && !/\s$/.test(pre) ? " " : "", s2 = post && !/^\s/.test(post) ? " " : "";
+    const a = el.selectionStart ?? v.length, b = el.selectionEnd ?? v.length;
+    let pre = v.slice(0, a), post = v.slice(b), s1, s2;
+    if (alt) {   // 번호는 앞뒤를 '; '로 나눔
+      pre = pre.replace(/[\s,]+$/, ""); post = post.replace(/^[\s,]+/, "");
+      s1 = !pre ? "" : /;$/.test(pre) ? " " : "; ";
+      s2 = !post ? "" : /^;/.test(post) ? "" : "; ";
+    } else {
+      s1 = pre && !/\s$/.test(pre) ? " " : ""; s2 = post && !/^\s/.test(post) ? " " : "";
+    }
     el.value = pre + s1 + text + s2 + post; const c = (pre + s1 + text).length; try { el.setSelectionRange(c, c) } catch (e) {}
   } else if (regState.auto[t] || !v.trim()) el.value = text;   // 처음 누르면 미리 채운 내용을 바꿈
-  else if (inVal(v, text)) el.value = removeFrom(v, text);
-  else el.value = v.replace(/\s+$/, "") + " " + text;
+  else if (inVal(v, word)) el.value = alt || t === "rgRemark" ? removeAlt(v, word) : removeFrom(v, word);
+  else el.value = v.replace(alt ? /[\s;,]+$/ : /\s+$/, "") + sep + text;
   regState.auto[t] = false; acHide(t); regRender();
 }
 /* 직접 칠 때: 기존에 등록된 값에서 바로 고르기 (품명은 한글 검색어로 영어 품명도) */
-const AC = { rgName: "n", rgModel: "m", rgMfr: "f" };
+const AC = { rgPmn: "n", rgModel: "m", rgMfr: "f" };
 function acHide(id) { const b = $("ac_" + id); if (b) b.hidden = true }
 function acShow(id) {
   const box = $("ac_" + id); if (!box) return;
@@ -1344,7 +1390,7 @@ function acShow(id) {
   for (const m of D.materials) { const v = m[key]; if (v) cnt.set(v, (cnt.get(v) || 0) + 1) }
   let hits = [...cnt.keys()].filter(v => v.toLowerCase().includes(ql) || (id === "rgModel" && norm(v).includes(norm(q)) && norm(q).length >= 3));
   const via = new Map();
-  if (id === "rgName" && HANGUL.test(q)) {
+  if (id === "rgPmn" && HANGUL.test(q)) {
     const std = KW.filter(([syn]) => syn.startsWith(ql) || (ql.length >= 2 && syn.includes(ql)));
     for (const v of cnt.keys()) { const hit = std.find(([, st]) => v.toLowerCase().includes(st)); if (hit) { hits.push(v); via.set(v, hit[0]) } }
   }
@@ -1440,7 +1486,7 @@ function regNameBox(ex, typed) {
   $("regDup").hidden = false; regPickEnd(true); $("regDup").scrollIntoView({ block: "center" });
 }
 function regSave() {
-  const v = { m: $("rgModel").value.trim().toUpperCase(), f: $("rgMfr").value.trim(), n: $("rgName").value.trim(), s: $("rgSpec").value.trim().replace(/\s+/g, " "),
+  const v = { m: $("rgModel").value.trim().toUpperCase(), f: $("rgMfr").value.trim(), n: $("rgPmn").value.trim(), s: $("rgSpec").value.trim().replace(/\s+/g, " "),
     u: regState.u || "EA", pu: regState.pu || "", pq: Number($("rgPq").value.replace(/,/g, "")) || 0, r: $("rgRemark").value.trim() };
   regPickEnd(true);
   if (!v.n) return regErr("품명을 고르거나 적어 주세요");
@@ -1454,7 +1500,7 @@ function regSave() {
   regErr("");
   // 같은 자재가 두 번 생기지 않게
   const k = norm(v.m);
-  if (k.length >= 4 && CODE.has(k)) return regDupBox([CODE.get(k)], "같은 품번이 이미 등록되어 있습니다. 이 자재로 세세요");
+  if (k.length >= 4 && CODE.has(k)) return regDupBox([CODE.get(k)], "같은 모델명(품번)이 이미 등록되어 있습니다. 이 자재로 세세요");
   if (!regState.dupOk) {
     let near = [];
     if (k.length >= 6) near = [...new Set(CODES.filter(c => c.k.length >= 6 && Math.abs(c.k.length - k.length) <= 1 && lev1(c.k, k)).map(c => c.id))].slice(0, 4);
@@ -1475,7 +1521,7 @@ function regSave() {
 function regSaveEdit(v) {
   const id = regState.id, m = MAT[id]; if (!m) return regBack();
   const k = norm(v.m);
-  if (k.length >= 4 && CODE.has(k) && CODE.get(k) !== id) return regDupBox([CODE.get(k)], "같은 품번이 이미 다른 자재로 등록되어 있습니다");
+  if (k.length >= 4 && CODE.has(k) && CODE.get(k) !== id) return regDupBox([CODE.get(k)], "같은 모델명(품번)이 이미 다른 자재로 등록되어 있습니다");
   Object.assign(m, { n: v.n, s: v.s, f: v.f, m: v.m, u: v.u, pu: v.pu, pq: v.pq, r: v.r });
   const n = S.newMats.find(x => x.id === id);
   if (n) Object.assign(n, { n: v.n, s: v.s, f: v.f, m: v.m, u: v.u, pu: v.pu, pq: v.pq, r: v.r });
@@ -1491,7 +1537,7 @@ async function syncMatEdits() {
     try { await apiPost({ action: "editMat", edit: e }); e.synced = true }
     catch (err) {
       const t = String(err);
-      if (/imported|notfound|dup/.test(t)) { e.synced = true; toast(/imported/.test(t) ? "이미 엑셀 자재목록에 들어간 자재입니다. PC [자재 관리]에서 수정해 주세요" : /dup/.test(t) ? "같은 품번이 이미 있어서 창구에는 수정하지 못했습니다" : "창구에서 이 자재를 찾지 못했습니다", true) }
+      if (/imported|notfound|dup/.test(t)) { e.synced = true; toast(/imported/.test(t) ? "이미 엑셀 자재목록에 들어간 자재입니다. PC [자재 관리]에서 수정해 주세요" : /dup/.test(t) ? "같은 모델명(품번)이 이미 있어서 창구에는 수정하지 못했습니다" : "창구에서 이 자재를 찾지 못했습니다", true) }
       else return;
     }
   }
@@ -1530,7 +1576,7 @@ async function rmSave() {
   const n = S.newMats.find(x => x.id === rmId && !x.synced);
   if (n) n.r = r;     // 아직 안 올린 새 자재면 등록 내용에 같이 들어감
   else S.rmEdits.push({ eid: "E" + S.device + Date.now().toString(36), id: rmId, r, old: m.r || "", by: S.user, at: new Date().toISOString() });
-  m.r = r; persist();
+  m.r = r; buildIndex(); persist();
   if (cur === "scrQty") { const x = $("qtyItem").querySelector(".rmline span"); if (x) x.textContent = "비고 " + (r || "없음") }
   toast("비고를 저장했습니다");
   syncRemarks();
@@ -1595,7 +1641,7 @@ document.addEventListener("click", e => {
     case "rgChip": regChip(+b.dataset.g, +b.dataset.w); break;
     case "rgPickDone": regPickEnd(); break;
     case "acPick": { const id = b.dataset.id; $(id).value = b.dataset.v; regState.auto[id] = false; acHide(id); regRender(); break }
-    case "regNameUse": $("rgName").value = b.dataset.v; regState.nameOk = true; $("regDup").hidden = true; regSave(); break;
+    case "regNameUse": $("rgPmn").value = b.dataset.v; regState.nameOk = true; $("regDup").hidden = true; regSave(); break;
     case "regNameKeep": regState.nameOk = true; $("regDup").hidden = true; regSave(); break;
     case "rgUnit": regState.u = b.dataset.v; regChips(); break;
     case "rgPu": regState.pu = b.dataset.v; if (!regState.pu) $("rgPq").value = ""; regChips(); break;
@@ -1606,7 +1652,7 @@ document.addEventListener("click", e => {
 });
 $("sheetBg").addEventListener("click", e => { if (e.target === $("sheetBg")) closeSheet() });
 $("rmBg").addEventListener("click", e => { if (e.target === $("rmBg")) $("rmBg").hidden = true });
-["rgMfr", "rgName"].forEach(id => $(id).addEventListener("input", () => regChips()));
+["rgMfr", "rgPmn"].forEach(id => $(id).addEventListener("input", () => regChips()));
 
 function renderNames() { $("nameList").innerHTML = (D.people || []).map(n => `<button data-act="setName" data-n="${esc(n)}">${esc(n)}</button>`).join("") }
 function start() {
